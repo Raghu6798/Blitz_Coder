@@ -83,3 +83,116 @@ def find_all_files(project_root: str):
         for f in filenames:
             all_files.append(os.path.join(dirpath, f))  # ← filled gap
     return all_files
+
+
+if __name__ == "__main__":
+    print("Which package manager do you want to use?")
+    print("1. npm")
+    print("2. yarn")
+    print("3. pnpm")
+    print("4. bun")
+    pm_choice = input("Enter the number (1-4): ").strip()
+
+    if pm_choice == "1":
+        package_manager = "npm"
+    elif pm_choice == "2":
+        package_manager = "yarn"
+    elif pm_choice == "3":
+        package_manager = "pnpm"
+    elif pm_choice == "4":
+        package_manager = "bun"
+    else:
+        print("Invalid choice, defaulting to npm.")
+        package_manager = "npm"
+
+    user_query = input("What do you want to build?: ")
+    project_name = slugify(user_query)
+    project_path = os.path.join(ROOT_DIR, project_name)
+
+    if os.path.exists(project_path):
+        print(f"❌ Project directory '{project_name}' already exists.")
+        print("Please provide a different project description or delete the existing directory.")
+    else:
+        print(f"✨ Creating new project directory: {project_path}")
+        os.makedirs(project_path)
+
+        tree_structure = determine_project_structure(user_query)
+        print(tree_structure)
+        print("🧠 Sending codebase structure tree to LLM...\n")
+        python_code = get_code_to_generate_structure(tree_structure, project_path)
+        print("🧾 Python Code to Recreate the Structure:\n")
+        print(python_code)
+
+        should_run = input("Do you want to execute the generated code to create the structure? (y/n): ").strip().lower()
+        if should_run == 'y':
+            try:
+                exec(python_code, {"__file__": __file__, "ROOT_DIR": ROOT_DIR, "os": os, "shutil": shutil, "project_path": project_path})
+                print("✅ Project structure created successfully!")
+            except Exception as e:
+                print(f"❌ Error executing generated code: {e}")
+        else:
+            print("Execution cancelled.")
+
+        max_retries = 5
+        retry_count = 0
+        error_logs = ""
+
+        while retry_count < max_retries:
+            # After structure is created, find all files
+            all_files = find_all_files(project_path)
+            print(f"Found {len(all_files)} files in the project folder.")
+
+            if not all_files:
+                print("🤷 No files were created in the project structure. Nothing to generate.")
+                break
+
+            # Generate code for all files, passing error_logs to the LLM
+            generate_code_for_all_files(all_files, tree_structure, user_query, project_path, package_manager, error_logs)
+
+            # Install dependencies
+            print(f"\n📦 Installing dependencies with {package_manager}...")
+            try:
+                if package_manager == "bun":
+                    install_cmd = [package_manager, "install"]
+                else:
+                    install_cmd = [package_manager, "install"]
+
+                install_proc = subprocess.run(install_cmd, cwd=project_path, capture_output=True, text=True)
+
+                if install_proc.returncode != 0 and install_proc.stderr:
+                    print(f"❌ Dependency installation failed:\n{install_proc.stderr}")
+                    error_logs = install_proc.stderr
+                    retry_count += 1
+                    continue
+            except Exception as e:
+                print(f"❌ Exception during dependency installation: {e}")
+                error_logs = str(e)
+                retry_count += 1
+                continue
+
+            # Start dev server
+            if package_manager == "npm":
+                dev_cmd = ["npm", "run", "dev"]
+            elif package_manager == "yarn":
+                dev_cmd = ["yarn", "dev"]
+            elif package_manager == "pnpm":
+                dev_cmd = ["pnpm", "dev"]
+            elif package_manager == "bun":
+                dev_cmd = ["bun", "run", "dev"]
+            else:
+                dev_cmd = ["npm", "run", "dev"]
+
+            print("\n🚀 Starting your app...")
+            dev_proc = subprocess.run(dev_cmd, cwd=project_path, capture_output=True, text=True)
+
+            if dev_proc.returncode != 0 and dev_proc.stderr:
+                if "error" in dev_proc.stderr.lower():
+                    print(f"❌ Dev server failed to start:\n{dev_proc.stderr}")
+                    error_logs = dev_proc.stderr
+                    retry_count += 1
+                    continue
+
+            print("✅ App started successfully!")
+            break
+        else:
+            print("❌ Max retries reached. Please check the logs and debug manually.")
