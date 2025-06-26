@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 
 # Blitzcode CLI
 
@@ -223,7 +223,7 @@ Pull requests are welcome! For major changes, please open an issue first to disc
 ## License
 [MIT](../LICENSE) 
 
-=======
+
 # Blitzcode CLI
 
 > **AI-powered code agent and utilities for developers**
@@ -305,4 +305,5 @@ Pull requests are welcome! For major changes, please open an issue first to disc
 
 ## License
 [MIT](../LICENSE) 
->>>>>>> 8653a1c2f791159f381bfee507ea0d53d185b90c
+
+
