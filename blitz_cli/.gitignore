@@ -1,0 +1,67 @@
+# Byte-compiled / optimized / DLL files
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+Pipfile.lock
+.build
+develop-eggs
+dist
+downloads
+eggs
+.eggs
+lib
+lib64
+parts
+sdist
+tmp
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+.ruff_cache
+*.manifest
+dist/
+
+# Installer logs
+pip-log.txt
+
+# Unit test / coverage reports
+.htmlcov/
+.coverage
+.coverage.*
+.nox/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Virtual Environments
+venv/
+.venv/
+.tox/
+
+# Environment variables
+.env
+
+# Cache directories
+__pycache__/
+
+# End of file marker. Leave this here.
+EOF

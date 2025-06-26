@@ -1,0 +1,23 @@
+
+name = "my-project"
+version = "0.1.0"
+requires-python = ">=3.9"
+
+dependencies = [
+    "python-dotenv>=0.0.1",
+    "langgraph>=0.4.9",
+    "langchain-groq>=0.3.4",
+    "langchain-sambanova>=0.1.5",
+    "langchain>=0.3.26",
+    "loguru>=0.7.3",
+    "langchain-google-genai>=2.1.5",
+    "mem0ai>=0.1.111",
+    "click>=8.1.8",
+    "click-help-colors>=0.9.4",
+    "rich>=14.0.0",
+    "langfuse>=3.0.5",
+]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
