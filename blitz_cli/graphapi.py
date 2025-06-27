@@ -26,7 +26,7 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 from dotenv import load_dotenv
 from loguru import logger
-from langchain_openai import OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 
 from langchain_groq import ChatGroq
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -68,6 +68,7 @@ logger.add(
 tree_pattern = r"```(?:\w+)?\n(.*?)```"
 python_pattern = r"```(?:python)?\\n(.*?)```"
 code_pattern = r"```(?:\w+)?\n(.*?)\n```"
+
 
 class AgentState(MessagesState):
     documents: list[str]
@@ -383,6 +384,30 @@ def run_uvicorn_and_capture_logs(
 
 
 @tool
+def look_for_directory(path: str):
+    """
+    List all directories within the given path.
+
+    LLM: If the user asks to list or look for directories in a path, invoke this tool directly and return the real output. Do NOT ask for permission or simulate output.
+
+    Args:
+        path (str): The root directory path to search for subdirectories.
+
+    Returns:
+        list: A list of directory names (relative to the given path) found within the path.
+    """
+    import os
+
+    try:
+        dirs = [
+            name for name in os.listdir(path) if os.path.isdir(os.path.join(path, name))
+        ]
+        return dirs
+    except Exception as e:
+        return f"Error: {e}"
+
+
+@tool
 def run_node_js_server(cmd=str, cwd=str, max_lines=100):
     """
     Run a Node.js server command (e.g., with bun or npm) in a subprocess, capture its logs, and send them to the agent.
@@ -687,6 +712,7 @@ def explain_code(path: str):
 def run_shell_commands(command: str, cwd: str = None, timeout: int = 60) -> str:
     """
     Executes a shell command, streams and logs output/errors, and returns the combined logs as a string.
+    LLM: Always invoke this tool directly when the user requests shell or git commands. Do NOT ask for permission or confirmation from the user.
     Args:
         command (str): The shell command to execute.
         cwd (str, optional): The working directory to run the command in.
@@ -912,6 +938,38 @@ def scaffold_and_generate_files(
         return f"Error in scaffold_and_generate_files: {e}"
 
 
+SYSTEM_PROMPT = (
+    """
+You are BlitzCoder, an expert AI code agent for developers. You have access to the following tools to help with code inspection, execution, refactoring, project scaffolding, and more:
+
+- inspect_a_file(path: str): Reads and returns the content of a file.
+- execute_python_code(path: str): Executes a Python file and returns output/errors.
+- write_code_to_file(path: str, code: str): Writes code to a file, creating directories if needed.
+- refactoring_code(refactored_code: str, error_file_path: str): Overwrites a file with refactored code.
+- extract_content_within_a_file(path: str): Extracts and returns the content of a file.
+- navigate_entire_codebase_given_path(path: str): Lists all files and directories recursively from a path.
+- run_uvicorn_and_capture_logs(...): Runs a FastAPI app with Uvicorn and captures logs.
+- look_for_directory(path: str): Lists all directories in a given path.
+- run_node_js_server(cmd: str, cwd: str, max_lines: int): Runs a Node.js server command and captures logs.
+- current_directory(): Returns the current working directory.
+- change_directory(path: str): Changes the current working directory.
+- error_detection(error: str, path: str): Logs and returns error information for a file.
+- generate_project_structure(framework: str, use_case: str): Generates a project folder structure.
+- generate_architecture_plan(framework: str, use_case: str, tree_structure: str): Generates an architecture plan.
+- generate_folder_creation_script(tree_structure: str): Generates a Python script to create a folder structure.
+- generate_file_content(...): Generates code for a specific file based on project context.
+- explain_code(path: str): Explains what a code file does.
+- run_shell_commands(command: str, cwd: str, timeout: int): Runs a shell command and returns logs.
+- agent_refactor_code(path: str): Refactors and fixes errors in a Python file.
+- create_project_structure_at_path(tree_structure: str, sub_root_dir: str): Creates a project structure at a path.
+- look_for_file_or_directory(name: str, root_path: str): Searches for a file or directory by name.
+- create_or_delete_file(path: str): Creates or deletes a file at the given path.
+- scaffold_and_generate_files(framework: str, use_case: str, project_root: str): Scaffolds a project and generates files.
+
+If a user's query can be answered by any tool, you MUST call the tool. Do NOT answer in text if a tool is available. Always use the most relevant tool for the user's request.
+"""
+)
+
 tools = [
     run_uvicorn_and_capture_logs,
     current_directory,
@@ -933,8 +991,8 @@ tools = [
     create_or_delete_file,
     write_code_to_file,
     inspect_a_file,
+    look_for_directory,
 ]
-
 CodeAgent = ChatGroq(
     model="qwen-qwq-32b",
     api_key=os.getenv("GROQ_API_KEY"),
@@ -953,7 +1011,8 @@ mistral_small = ChatGroq(
     model="meta-llama/llama-4-maverick-17b-128e-instruct",
 )
 
-llm_with_tool = CodeAgent.bind_tools(tools)
+
+llm_with_tool = gemini.bind_tools(tools)
 
 
 def update_memory(state: AgentState, config: RunnableConfig, *, store: BaseStore):
@@ -987,8 +1046,6 @@ def update_memory(state: AgentState, config: RunnableConfig, *, store: BaseStore
                 memory_content,
                 index=["memory", "context", "user_query"],  # Fields to embed
             )
-
-            logger.info(f"Stored memory for user {user_id}: {user_msg.content[:50]}...")
 
     return state
 
@@ -1044,12 +1101,18 @@ Please respond considering our conversation history and any relevant context fro
 def enhanced_tool_calling_llm(
     state: AgentState, config: RunnableConfig, *, store: BaseStore
 ):
-    """Enhanced LLM call that considers semantic memory"""
+    """Enhanced LLM call that considers semantic memory and always prepends the SYSTEM_PROMPT."""
     # First retrieve relevant context
     enhanced_state = retrieve_and_enhance_context(state, config, store=store)
 
-    # Then call the LLM with enhanced context
-    response = llm_with_tool.invoke(enhanced_state["messages"])
+    # Always prepend SYSTEM_PROMPT as the first message
+    messages = enhanced_state["messages"]
+    # Remove any previous system messages
+    messages = [msg for msg in messages if not (hasattr(msg, 'role') and getattr(msg, 'role', None) == 'system')]
+    # Prepend SYSTEM_PROMPT
+    messages = [SystemMessage(content=SYSTEM_PROMPT)] + messages
+
+    response = llm_with_tool.invoke(messages)
 
     return {"messages": [response]}
 
