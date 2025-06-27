@@ -65,6 +65,47 @@ logger.add(
 #     langfuse = None
 #     langfuse_handler = None
 
+import subprocess
+import threading
+
+class PersistentPowerShell:
+    def __init__(self):
+        self.process = subprocess.Popen(
+            ["powershell.exe", "-NoLogo", "-NoExit", "-Command", "-"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True,
+            bufsize=1
+        )
+        self.lock = threading.Lock()
+
+    def run_command(self, command, timeout=30):
+        with self.lock:
+            # Write the command and a marker to know when output ends
+            marker = "___END_OF_COMMAND___"
+            self.process.stdin.write(command + f"\nWrite-Output '{marker}'\n")
+            self.process.stdin.flush()
+
+            output_lines = []
+            for line in self.process.stdout:
+                if marker in line:
+                    break
+                output_lines.append(line)
+            return "".join(output_lines)
+
+    def close(self):
+        with self.lock:
+            self.process.stdin.write("exit\n")
+            self.process.stdin.flush()
+            self.process.terminate()
+            self.process.wait()
+            
+
+ps = PersistentPowerShell()
+print(ps.run_command("Get-ChildItem -Force"))
+ps.close()
+
 tree_pattern = r"```(?:\w+)?\n(.*?)```"
 python_pattern = r"```(?:python)?\\n(.*?)```"
 code_pattern = r"```(?:\w+)?\n(.*?)\n```"
@@ -118,6 +159,13 @@ def send_error_logs_to_agent(error_logs):
     logger.info("\n--- Gemini Response ---")
     logger.info(response.content)
 
+@tool
+def persistent_powershell_command(command: str) -> str:
+    """
+    Run a command in a persistent PowerShell session and return the output.
+    The session preserves state (variables, working directory, etc.) between calls.
+    """
+    return ps.run_command(command)
 
 @tool
 def inspect_a_file(path: str):
@@ -938,8 +986,7 @@ def scaffold_and_generate_files(
         return f"Error in scaffold_and_generate_files: {e}"
 
 
-SYSTEM_PROMPT = (
-    """
+SYSTEM_PROMPT = """
 You are BlitzCoder, an expert AI code agent for developers. You have access to the following tools to help with code inspection, execution, refactoring, project scaffolding, and more:
 
 - inspect_a_file(path: str): Reads and returns the content of a file.
@@ -968,7 +1015,6 @@ You are BlitzCoder, an expert AI code agent for developers. You have access to t
 
 If a user's query can be answered by any tool, you MUST call the tool. Do NOT answer in text if a tool is available. Always use the most relevant tool for the user's request.
 """
-)
 
 tools = [
     run_uvicorn_and_capture_logs,
@@ -992,6 +1038,7 @@ tools = [
     write_code_to_file,
     inspect_a_file,
     look_for_directory,
+    persistent_powershell_command
 ]
 CodeAgent = ChatGroq(
     model="qwen-qwq-32b",
@@ -1108,7 +1155,11 @@ def enhanced_tool_calling_llm(
     # Always prepend SYSTEM_PROMPT as the first message
     messages = enhanced_state["messages"]
     # Remove any previous system messages
-    messages = [msg for msg in messages if not (hasattr(msg, 'role') and getattr(msg, 'role', None) == 'system')]
+    messages = [
+        msg
+        for msg in messages
+        if not (hasattr(msg, "role") and getattr(msg, "role", None) == "system")
+    ]
     # Prepend SYSTEM_PROMPT
     messages = [SystemMessage(content=SYSTEM_PROMPT)] + messages
 
@@ -1147,6 +1198,7 @@ def run_agent_with_memory(query: str, user_id: str = "default", thread_id: str =
 
     config = {
         "configurable": {"thread_id": thread_id, "user_id": user_id},
+        "recursion_limit": 100
     }
 
     # Stream the response
