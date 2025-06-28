@@ -1,8 +1,34 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
 
-name = "my-project"
-version = "0.1.0"
+[project]
+name = "blitzcoder"
+version = "1.0.0"
+description = "AI-powered development assistant for code generation, refactoring, and project management"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "BlitzCoder Team", email = "raghunandanerukulla@gmail.com"}
+]
+maintainers = [
+    {name = "Raghu Nandan Erukulla", email = "raghunandanerukulla@gmail.com"}
+]
+keywords = ["ai", "code-generation", "development", "assistant", "cli"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Code Generators",
+]
 requires-python = ">=3.9"
-
 dependencies = [
     "python-dotenv>=0.0.1",
     "langgraph>=0.4.9",
@@ -18,6 +44,43 @@ dependencies = [
     "langfuse>=3.0.5",
 ]
 
-[build-system]
-requires = ["setuptools", "wheel"]
-build-backend = "setuptools.build_meta"
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=22.0.0",
+    "isort>=5.0.0",
+    "flake8>=5.0.0",
+    "mypy>=1.0.0",
+]
+
+[project.scripts]
+blitzcoder = "blitzcoder.cli.cli_coder:cli"
+
+[project.urls]
+Homepage = "https://github.com/Raghu6798/BlitzCoder"
+Repository = "https://github.com/Raghu6798/BlitzCoder"
+Documentation = "https://github.com/Raghu6798/BlitzCoder#readme"
+"Bug Tracker" = "https://github.com/Raghu6798/BlitzCoder/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"*" = ["*.txt", "*.md", "*.yml", "*.yaml"]
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true

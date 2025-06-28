@@ -44,7 +44,7 @@ from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_groq import ChatGroq
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-from blitz_cli.config.settings import AgentSettings
+from config.settings import AgentSettings
 
 load_dotenv()
 
@@ -57,7 +57,7 @@ logger.add(
     else "<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{message}</cyan>",
 )
 
-PROJECT_ROOT = os.path.dirname(os.path.abspath(_file_))
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 # @retry(
 #     stop=stop_after_attempt(3),
 #     wait=wait_fixed(2),

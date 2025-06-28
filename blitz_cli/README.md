@@ -1,94 +1,176 @@
-# BlitzCode CLI
+# BlitzCoder
 
-**AI-powered code agent and utilities for developers**
-
-![Blitzcode Banner](../assets/banner.png)
-
-## Overview
-Blitzcode CLI is a powerful, AI-driven command-line tool that helps you scaffold, generate, inspect, and manage code projects at terminal speed. It leverages advanced language models to automate repetitive coding tasks, provide code explanations, refactor code, and much more—all from your terminal.
+⚡ **AI-Powered Development Assistant** - A comprehensive CLI tool for code generation, refactoring, and project management.
 
 ## Features
-- **AI-powered project scaffolding** for popular frameworks (FastAPI, Spring Boot, Next.js, etc.)
-- **Code generation** for files, modules, and entire architectures
-- **Interactive agent loop** with model selection (Qwen, Gemini, Llama, etc.)
-- **File inspection, extraction, and search**
-- **Run and debug Python and Node.js servers**
-- **Code refactoring and explanation**
-- **Colorized CLI help and output**
-- **.agentignore support** to protect sensitive files
+
+- 🤖 **AI-Powered Code Generation** - Generate code using Google's Gemini model
+- 🔧 **Code Refactoring** - Automatically refactor and improve existing code
+- 📁 **Project Scaffolding** - Create complete project structures with architecture plans
+- 🧠 **Memory System** - Remember previous conversations and context
+- 🛠️ **Development Tools** - File inspection, execution, and management tools
+- 🔍 **Code Analysis** - Explain and analyze code functionality
 
 ## Installation
 
-### Option 1: Install as a Python Package (Recommended)
+### Option 1: Install from Source (Recommended)
 
-1. Clone the repository:
 ```bash
-git clone <your-repo-url>
-cd Blitzcode/blitz_cli
+# Clone the repository
+git clone https://github.com/Raghu6798/Blitz_Coder.git
+cd BlitzCoder/blitz_cli
+
+# Install in development mode
+python install.py
 ```
 
-2. Install the package in development mode:
+### Option 2: Manual Installation
+
 ```bash
+cd blitz_cli
 pip install -e .
 ```
 
-3. Test the installation:
-```bash
-blitzcode --help
-```
-
-### Option 2: Run Directly
+### Option 3: Direct Script Execution
 
 ```bash
-python -m src.blitzcoder.cli.CLI_coder interactive --google-api-key YOUR_API_KEY
+# Windows
+python scripts/blitzcoder.bat
+
+# Linux/Mac
+python scripts/blitzcoder
 ```
 
-## Usage
+## Quick Start
 
-### Interactive Mode
+### 1. Set up your API Keys
 
-Start the interactive AI agent:
+You'll need a Google API key for the Gemini model:
 
 ```bash
-# With API key as argument
-blitzcode interactive --google-api-key YOUR_API_KEY
+# Set environment variable
+export GOOGLE_API_KEY="your-api-key-here"
 
-# Or let it prompt you for the API key
-blitzcode interactive
+# Or on Windows
+set GOOGLE_API_KEY=your-api-key-here
 ```
 
-### Search Memories
-
-Search through your conversation history:
+### 2. Start Interactive Chat
 
 ```bash
-blitzcode search-memories-cli --query "your search query" --google-api-key YOUR_API_KEY
+blitzcoder chat
 ```
 
-### Available Commands
+### 3. Search Memories
 
-- `blitzcode interactive` - Start interactive AI agent
-- `blitzcode search-memories-cli` - Search conversation memories
-- `blitzcode --help` - Show all available commands
+```bash
+blitzcoder search-memories --query "your search term"
+```
 
-## Demo Video
+## Usage Examples
 
-[![Watch the demo](demo.png)](demo.mp4)
+### Interactive Chat Mode
 
-> **Video Placeholder:**
-> - Place your demo video as `demo.mp4` in this directory.
-> - Add a thumbnail image as `demo.png` if desired.
+```bash
+blitzcoder chat
+```
 
-## Description
-Blitzcode CLI is designed for developers who want to:
-- Rapidly scaffold and generate code projects using AI
-- Interactively query, refactor, and explain code
-- Automate repetitive coding and project setup tasks
-- Keep sensitive files safe with .agentignore
-- Enjoy a modern, colorized CLI experience
+This starts an interactive session where you can:
+- Ask questions about code
+- Request code generation
+- Get help with refactoring
+- Search through previous conversations
+
+### Search Previous Conversations
+
+```bash
+blitzcoder search-memories --query "React component"
+```
+
+### Use with API Key Parameter
+
+```bash
+blitzcoder chat --google-api-key "your-api-key"
+```
+
+## Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `chat` | Start interactive AI chat session |
+| `search-memories` | Search through conversation history |
+
+## Development
+
+### Project Structure
+
+```
+blitz_cli/
+├── src/
+│   └── blitzcoder/
+│       ├── cli/
+│       │   ├── __init__.py
+│       │   └── cli_coder.py
+│       └── __init__.py
+├── config/
+│   └── templates/
+├── scripts/
+│   ├── blitzcoder
+│   └── blitzcoder.bat
+├── setup.py
+├── pyproject.toml
+└── install.py
+```
+
+### Running Tests
+
+```bash
+# Install development dependencies
+pip install -e ".[dev]"
+
+# Run tests
+pytest
+```
+
+### Code Formatting
+
+```bash
+# Format code
+black src/
+isort src/
+
+# Type checking
+mypy src/
+```
+
+## Configuration
+
+The package uses environment variables for configuration:
+
+- `GOOGLE_API_KEY` - Required for Gemini model access
+- `GROQ_API_KEY` - Optional for additional models
+- `NOVITA_API_KEY` - Optional for embeddings
 
 ## Contributing
-Pull requests are welcome! For major changes, please open an issue first to discuss what you would like to change.
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
 
 ## License
-[MIT](../LICENSE) 
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Support
+
+- 📧 Email: raghunandanerukulla@gmail.com
+- 🐛 Issues: [GitHub Issues](https://github.com/Raghu6798/BlitzCoder/issues)
+- 📖 Documentation: [GitHub README](https://github.com/Raghu6798/BlitzCoder#readme)
+
+## Acknowledgments
+
+- Built with [LangGraph](https://github.com/langchain-ai/langgraph)
+- Powered by [Google Gemini](https://ai.google.dev/)
+- Enhanced with [Rich](https://github.com/Textualize/rich) for beautiful CLI output 

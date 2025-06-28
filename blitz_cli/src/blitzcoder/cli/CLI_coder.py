@@ -21,7 +21,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 console = Console()
 
 # --- Your tools ---
-from blitz_cli.src.main.graphapi import (
+from main.graphapi import (
     print_welcome_banner, show_info, run_agent_with_memory, search_memories,
     run_uvicorn_and_capture_logs, current_directory, change_directory,
     navigate_entire_codebase_given_path, extract_content_within_a_file,
