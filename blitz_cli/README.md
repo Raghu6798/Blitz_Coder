@@ -1,6 +1,6 @@
 # BlitzCode CLI
 
-> **AI-powered code agent and utilities for developers**
+**AI-powered code agent and utilities for developers**
 
 ![Blitzcode Banner](../assets/banner.png)
 

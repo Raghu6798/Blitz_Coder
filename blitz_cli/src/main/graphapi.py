@@ -57,7 +57,7 @@ logger.add(
     else "<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{message}</cyan>",
 )
 
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(os.path.abspath(_file_))
 # @retry(
 #     stop=stop_after_attempt(3),
 #     wait=wait_fixed(2),
@@ -156,7 +156,7 @@ def simulate_progress(task_desc: str):
 
 
 class PersistentPowerShell:
-    def __init__(self):
+    def _init_(self):
         self.process = subprocess.Popen(
             ["powershell.exe", "-NoLogo", "-NoExit", "-Command", "-"],
             stdin=subprocess.PIPE,
@@ -170,7 +170,7 @@ class PersistentPowerShell:
     def run_command(self, command, timeout=30):
         with self.lock:
             # Write the command and a marker to know when output ends
-            marker = "___END_OF_COMMAND___"
+            marker = "END_OF_COMMAND"
             self.process.stdin.write(command + f"\nWrite-Output '{marker}'\n")
             self.process.stdin.flush()
 
@@ -191,9 +191,9 @@ class PersistentPowerShell:
 
 ps = PersistentPowerShell()
 
-tree_pattern = r"```(?:\w+)?\n(.*?)```"
-python_pattern = r"```(?:python)?\\n(.*?)```"
-code_pattern = r"```(?:\w+)?\n(.*?)\n```"
+tree_pattern = r"(?:\w+)?\n(.*?)"
+python_pattern = r"(?:python)?\\n(.*?)"
+code_pattern = r"(?:\w+)?\n(.*?)\n"
 
 
 class AgentState(MessagesState):
@@ -327,7 +327,7 @@ def execute_python_code(path: str):
 def write_code_to_file(path: str, code: str):
     """
     Write the provided code string to the specified file path, creating parent directories if needed.
-    If the code contains class or function definitions, append an if __name__ == "__main__": block to run the function(s) or instantiate the class and invoke its methods.
+    If the code contains class or function definitions, append an if _name_ == "_main_": block to run the function(s) or instantiate the class and invoke its methods.
 
     Args:
         path (str): The file path to write to.
@@ -344,15 +344,15 @@ def write_code_to_file(path: str, code: str):
         func_names = re.findall(r"^def\s+(\w+)\s*\(", code, re.MULTILINE)
         main_block = ""
         if class_names or func_names:
-            main_block += '\n\nif __name__ == "__main__":\n'
+            main_block += '\n\nif _name_ == "_main_":\n'
             for cname in class_names:
                 main_block += f"    obj = {cname}()\n"
-                # Try to find methods (excluding __init__)
+                # Try to find methods (excluding _init_)
                 method_matches = re.findall(
                     rf"^\s+def\s+(\w+)\s*\(", code, re.MULTILINE
                 )
                 for m in method_matches:
-                    if m != "__init__":
+                    if m != "_init_":
                         main_block += f"    obj.{m}()\n"
             for fname in func_names:
                 main_block += f"    {fname}()\n"
@@ -433,7 +433,7 @@ def navigate_entire_codebase_given_path(path: str):
     Returns:
         None: Directly prints the rich Tree view to the console.
     """
-    skip_dirs = {"__pycache__", ".git", ".venv", ".cache", "node_modules"}
+    skip_dirs = {"_pycache_", ".git", ".venv", ".cache", "node_modules"}
     skip_files = {".DS_Store"}
     skip_exts = {".pyc", ".pyo"}
     file_list = []
@@ -784,7 +784,7 @@ Wrap your analysis in triple backticks as structured JSON with this format:
         framework=framework, use_case=use_case, tree_structure=tree_structure
     )
     result = mistral_small.invoke(messages)
-    match = re.search(r"```(?:json)?\s*([\s\S]*?)```", result.content, re.DOTALL)
+    match = re.search(r"(?:json)?\s*([\s\S]*?)", result.content, re.DOTALL)
     plan = match.group(1).strip() if match else result.content
     show_info("Architecture plan created!")
     return plan
@@ -800,7 +800,7 @@ def generate_folder_creation_script(tree_structure: str) -> str:
         [
             (
                 "system",
-                """Generate a Python script that creates the given folder structure.\n\nRequirements:\n- Define a function (e.g., create_folder_structure) that takes a root directory as argument and creates the entire structure inside it\n- The structure should be created inside a folder named "Example_project" under the root directory\n- At the end of the script, call this function in an if __name__ == "__main__": block\n- All folders and files should be created relative to the Example_project directory\n- Use os.makedirs() for directories with exist_ok=True to avoid errors\n- Use open().write() to create files with basic content\n- Handle nested directories properly\n- Create empty files where needed\n- Wrap in triple backticks with python identifier\n\nTree Structure: {tree_structure}""",
+                """Generate a Python script that creates the given folder structure.\n\nRequirements:\n- Define a function (e.g., create_folder_structure) that takes a root directory as argument and creates the entire structure inside it\n- The structure should be created inside a folder named "Example_project" under the root directory\n- At the end of the script, call this function in an if _name_ == "_main_": block\n- All folders and files should be created relative to the Example_project directory\n- Use os.makedirs() for directories with exist_ok=True to avoid errors\n- Use open().write() to create files with basic content\n- Handle nested directories properly\n- Create empty files where needed\n- Wrap in triple backticks with python identifier\n\nTree Structure: {tree_structure}""",
             ),
             (
                 "user",
@@ -810,7 +810,7 @@ def generate_folder_creation_script(tree_structure: str) -> str:
     )
     messages = folder_prompt.format_messages(tree_structure=tree_structure)
     result = mistral_small.invoke(messages)
-    match = re.search(r"```(?:python)?\s*([\s\S]*?)```", result.content, re.DOTALL)
+    match = re.search(r"(?:python)?\s*([\s\S]*?)", result.content, re.DOTALL)
     code = match.group(1).strip() if match else result.content
     show_info("Folder creation script generated!")
     return code
@@ -831,7 +831,7 @@ def generate_file_content(
     Generate content for a specific file based on the architecture plan and project context.
     Returns the code as a string.
     """
-    system_prompt = """You are an expert software developer specializing in production-ready, scalable applications. Generate code for the specified file following modern best practices and patterns, regardless of programming language or framework.\n\n**PROJECT CONTEXT:**\nFramework: {framework}\nUse Case: {use_case}\nFile: {file_path}\nPurpose: {purpose}\nKey Features: {features}\n\n**COMPLETE PROJECT ARCHITECTURE:**\n{architecture_overview}\n\n**COMPONENT RELATIONSHIPS:**\n{data_flow}\n\n**FILE DEPENDENCIES:**\n{dependencies}\n\n---\n\n**3. SECURITY BEST PRACTICES:**\n- Implement proper authentication/authorization if applicable\n- Use secure password handling where relevant\n- Implement secure token handling if needed\n- Use proper CORS configuration for web APIs\n- Input validation and sanitization\n\n**4. CODE QUALITY:**\n- Type annotations or equivalents and proper documentation\n- Clean code principles\n- Proper error handling\n- Logging and monitoring\n- Unit test coverage\n- Performance optimization\n\n**5. PROJECT STRUCTURE:**\n- Modular and maintainable code\n- Clear separation of concerns\n- Dependency injection where appropriate\n- Configuration management\n- Environment variable handling\n\n---\n**🎯 FINAL INSTRUCTIONS:**\n\nGenerate ONLY the complete, production-ready code for: **{file_path}**\n\nRequirements:\n1. Follow all architectural patterns above\n2. Include proper type annotations or equivalents\n3. Add comprehensive documentation\n4. Include proper error handling\n5. Ensure proper imports or dependencies\n6. Add logging where appropriate\n\nDo not include explanations or text outside the code block."""
+    system_prompt = """You are an expert software developer specializing in production-ready, scalable applications. Generate code for the specified file following modern best practices and patterns, regardless of programming language or framework.\n\n*PROJECT CONTEXT:\nFramework: {framework}\nUse Case: {use_case}\nFile: {file_path}\nPurpose: {purpose}\nKey Features: {features}\n\nCOMPLETE PROJECT ARCHITECTURE:\n{architecture_overview}\n\nCOMPONENT RELATIONSHIPS:\n{data_flow}\n\nFILE DEPENDENCIES:\n{dependencies}\n\n---\n\n3. SECURITY BEST PRACTICES:\n- Implement proper authentication/authorization if applicable\n- Use secure password handling where relevant\n- Implement secure token handling if needed\n- Use proper CORS configuration for web APIs\n- Input validation and sanitization\n\n4. CODE QUALITY:\n- Type annotations or equivalents and proper documentation\n- Clean code principles\n- Proper error handling\n- Logging and monitoring\n- Unit test coverage\n- Performance optimization\n\n5. PROJECT STRUCTURE:\n- Modular and maintainable code\n- Clear separation of concerns\n- Dependency injection where appropriate\n- Configuration management\n- Environment variable handling\n\n---\n🎯 FINAL INSTRUCTIONS:\n\nGenerate ONLY the complete, production-ready code for: **{file_path}*\n\nRequirements:\n1. Follow all architectural patterns above\n2. Include proper type annotations or equivalents\n3. Add comprehensive documentation\n4. Include proper error handling\n5. Ensure proper imports or dependencies\n6. Add logging where appropriate\n\nDo not include explanations or text outside the code block."""
     content_prompt = ChatPromptTemplate.from_messages(
         [
             ("system", system_prompt),
@@ -849,7 +849,7 @@ def generate_file_content(
         dependencies=dependencies,
     )
     result = mistral_small.invoke(messages)
-    match = re.search(r"```(?:python)?\s*([\s\S]*?)```", result.content, re.DOTALL)
+    match = re.search(r"(?:python)?\s*([\s\S]*?)", result.content, re.DOTALL)
     return match.group(1).strip() if match else result.content.strip()
 
 
@@ -954,7 +954,7 @@ def create_project_structure_at_path(tree_structure: str, sub_root_dir: str) -> 
         cwd = os.getcwd()
         os.chdir(sub_root_dir)
         # Execute the script in the context of the sub_root_dir
-        exec(script, {"os": os, "__name__": "__main__"})
+        exec(script, {"os": os, "_name": "main_"})
         os.chdir(cwd)  # Return to original directory
         return f"Project structure created at {sub_root_dir}"
     except Exception as e:
@@ -966,7 +966,7 @@ def create_project_structure_at_path(tree_structure: str, sub_root_dir: str) -> 
 def look_for_file_or_directory(name: str, root_path: str = "."):
     """
     Recursively search for a file or directory by name from the given root path and return all matching paths (relative to root_path),
-    excluding any matches or traversal within {'.git', '__pycache__', 'node_modules', '.venv', '.gitignore'}.
+    excluding any matches or traversal within {'.git', '_pycache_', 'node_modules', '.venv', '.gitignore'}.
 
     Args:
         name (str): The name of the file or directory to search for.
@@ -975,7 +975,7 @@ def look_for_file_or_directory(name: str, root_path: str = "."):
     Returns:
         str: A string representation of the matching paths.
     """
-    exclude = {".git", "__pycache__", "node_modules", ".venv", ".gitignore"}
+    exclude = {".git", "_pycache_", "node_modules", ".venv", ".gitignore"}
     matches = []
     show_info(f"Searching for '{name}' in '{root_path}'...")
     for root, dirs, files in os.walk(root_path):
@@ -1312,7 +1312,7 @@ builder.add_node("tools", ToolNode(tools))
 builder.add_edge(START, "enhanced_llm")
 
 builder.add_conditional_edges(
-    "enhanced_llm", tools_condition, {"tools": "tools", "__end__": "update_memory"}
+    "enhanced_llm", tools_condition, {"tools": "tools", "_end_": "update_memory"}
 )
 builder.add_edge("tools", "enhanced_llm")
 builder.add_edge("update_memory", END)
@@ -1392,7 +1392,7 @@ def search_memories(user_id: str, query: str, limit: int = 5):
         print(f"Created: {memory.created_at}")
 
 
-if __name__ == "__main__":
+if __name__ == "_main_":
     print_welcome_banner()
   
     # Get user ID for session
@@ -1414,5 +1414,3 @@ if __name__ == "__main__":
 
 
         run_agent_with_memory(query, user_id, thread_id)
-
-
