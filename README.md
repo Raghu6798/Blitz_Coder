@@ -4,7 +4,8 @@
 
 > **AI-powered code agent and utilities for developers**
 
-![Blitzcode Banner](../assets/banner.png)
+![image](https://github.com/user-attachments/assets/39b5a459-18ce-4785-869e-adde1d2ed844)
+
 
 ## Overview
 Blitzcode CLI is a powerful, AI-driven command-line tool that helps you scaffold, generate, inspect, and manage code projects at terminal speed. It leverages advanced language models and semantic memory to automate repetitive coding tasks, provide code explanations, refactor code, and much more—all from your terminal.
