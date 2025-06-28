@@ -1,11 +1,14 @@
-import os
+import os 
 from dotenv import load_dotenv
-from langfuse import Langfuse
-from langfuse.langchain import CallbackHandler
 import requests
-from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
+
+from tenacity import retry,stop_after_attempt,wait_fixed,retry_if_exception_type
 
 load_dotenv()
+
+from langfuse.langchain import CallbackHandler
+from langfuse import Langfuse
+
 
 
 @retry(
@@ -21,13 +24,4 @@ def init_langfuse():
         host="https://us.cloud.langfuse.com",
     )
 
-
-try:
-    langfuse = init_langfuse()
-    langfuse_handler = CallbackHandler()
-except Exception as e:
-    print(f"Langfuse initialization failed after retries: {e}")
-    langfuse = None
-    langfuse_handler = None
-
-print(langfuse_handler)
+print(init_langfuse())

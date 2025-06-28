@@ -1,4 +1,4 @@
-# Blitzcode CLI
+# BlitzCode CLI
 
 > **AI-powered code agent and utilities for developers**
 
@@ -19,44 +19,57 @@ Blitzcode CLI is a powerful, AI-driven command-line tool that helps you scaffold
 
 ## Installation
 
+### Option 1: Install as a Python Package (Recommended)
+
 1. Clone the repository:
-   ```sh
-   git clone <your-repo-url>
-   cd blitz_cli
-   ```
-2. Install dependencies (using uv, poetry, or pip):
-   ```sh
-   uv pip install -r requirements.txt
-   # or
-   poetry install
-   # or
-   pip install -r requirements.txt
-   ```
-3. (Optional) Install `click-help-colors` for colorized help:
-   ```sh
-   pip install click-help-colors
-   ```
+```bash
+git clone <your-repo-url>
+cd Blitzcode/blitz_cli
+```
+
+2. Install the package in development mode:
+```bash
+pip install -e .
+```
+
+3. Test the installation:
+```bash
+blitzcode --help
+```
+
+### Option 2: Run Directly
+
+```bash
+python -m src.blitzcoder.cli.CLI_coder interactive --google-api-key YOUR_API_KEY
+```
 
 ## Usage
 
-Run the CLI with:
-```sh
-python CLI_coder.py --help
+### Interactive Mode
+
+Start the interactive AI agent:
+
+```bash
+# With API key as argument
+blitzcode interactive --google-api-key YOUR_API_KEY
+
+# Or let it prompt you for the API key
+blitzcode interactive
 ```
 
-### Example Commands
-- Inspect a file:
-  ```sh
-  python CLI_coder.py inspect path/to/file.py
-  ```
-- Scaffold a FastAPI project:
-  ```sh
-  python CLI_coder.py scaffold fastapi "ecommerce api"
-  ```
-- Start the interactive agent loop (with model selection):
-  ```sh
-  python CLI_coder.py agent --model gemini-2.0-flash
-  ```
+### Search Memories
+
+Search through your conversation history:
+
+```bash
+blitzcode search-memories-cli --query "your search query" --google-api-key YOUR_API_KEY
+```
+
+### Available Commands
+
+- `blitzcode interactive` - Start interactive AI agent
+- `blitzcode search-memories-cli` - Search conversation memories
+- `blitzcode --help` - Show all available commands
 
 ## Demo Video
 
