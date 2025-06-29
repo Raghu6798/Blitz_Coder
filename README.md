@@ -1,143 +1,176 @@
+# BlitzCoder
 
-
-# Blitzcode CLI
-
-> **AI-powered code agent and utilities for developers**
-
-![image](https://github.com/user-attachments/assets/39b5a459-18ce-4785-869e-adde1d2ed844)
-
-
-## Overview
-Blitzcode CLI is a powerful, AI-driven command-line tool that helps you scaffold, generate, inspect, and manage code projects at terminal speed. It leverages advanced language models and semantic memory to automate repetitive coding tasks, provide code explanations, refactor code, and much more—all from your terminal.
+⚡ **AI-Powered Development Assistant** - A comprehensive CLI tool for code generation, refactoring, and project management.
 
 ## Features
-- **AI-powered project scaffolding** for popular frameworks (FastAPI, Spring Boot, Next.js, etc.)
-- **Code generation** for files, modules, and entire architectures
-- **Interactive agent loop** with model selection (Qwen, Gemini, Llama, etc.)
-- **Semantic memory agent** for context-aware, human-in-the-loop workflows
-- **File inspection, extraction, and search**
-- **Run and debug Python and Node.js servers**
-- **Code refactoring and explanation**
-- **Colorized CLI help and output**
-- **.agentignore support** to protect sensitive files
+
+- 🤖 **AI-Powered Code Generation** - Generate code using Google's Gemini model
+- 🔧 **Code Refactoring** - Automatically refactor and improve existing code
+- 📁 **Project Scaffolding** - Create complete project structures with architecture plans
+- 🧠 **Memory System** - Remember previous conversations and context
+- 🛠️ **Development Tools** - File inspection, execution, and management tools
+- 🔍 **Code Analysis** - Explain and analyze code functionality
 
 ## Installation
 
-1. Clone the repository:
-   ```sh
-   git clone <your-repo-url>
-   cd blitz_cli
-   ```
-2. Install as a package (recommended):
-   ```sh
-   pip install .
-   # or for development
-   pip install -e .
-   ```
-   Or install dependencies manually:
-   ```sh
-   pip install -r requirements.txt
-   ```
+### Option 1: Install from Source (Recommended)
 
-## Usage
+```bash
+# Clone the repository
+git clone https://github.com/Raghu6798/Blitz_Coder.git
+cd BlitzCoder/blitz_cli
 
-After installation, run the CLI with:
-```sh
-blitzcode --help
-```
-Or, if running directly:
-```sh
-python CLI_coder.py --help
+# Install in development mode
+python install.py
 ```
 
-### Main Commands
+### Option 2: Manual Installation
 
-- **Interactive Agent Loop (with model selection):**
-  ```sh
-  blitzcode agent --model <model_name> [--groq-api-key <your_groq_api_key>]
-  ```
-  - Supported models: qwen-qwq-32b, llama-3.3-70b-versatile, deepseek-r1-distill-llama-70b, etc.
-  - If using a Groq model, provide your API key via `--groq-api-key` or the `GROQ_API_KEY` environment variable.
-
-- **Semantic Memory Agent (recommended for advanced workflows):**
-  ```sh
-  blitzcode semantic-agent
-  ```
-  - This launches the advanced agent with semantic memory, human-in-the-loop approval, and context-aware reasoning.
-  - Type your queries at the prompt. Type `bye` or `exit` to quit.
-  - To search your semantic memory, type:
-    ```
-    search: <your search query>
-    ```
-
-- **Inspect a file:**
-  ```sh
-  blitzcode inspect path/to/file.py
-  ```
-
-- **Scaffold a project:**
-  ```sh
-  blitzcode scaffold fastapi "ecommerce api"
-  ```
-
-### Model Initialization and API Keys
-- **Groq Models:**
-    - You must provide your own API key for Groq models. The CLI supports both the `--groq-api-key` argument and the `GROQ_API_KEY` environment variable.
-    - Example:
-      ```sh
-      blitzcode agent --model qwen-qwq-32b --groq-api-key <your_groq_api_key>
-      # or
-      export GROQ_API_KEY=<your_groq_api_key>
-      blitzcode agent --model qwen-qwq-32b
-      ```
-    - If neither is provided, the CLI will print an error and exit.
-- **Gemini Model:**
-    - Set your `GOOGLE_API_KEY` in the environment.
-      ```sh
-      export GOOGLE_API_KEY=<your_google_api_key>
-      blitzcode agent --model gemini-2.0-flash
-      ```
-- **Other Models:**
-    - See the CLI help for supported models and required keys.
-
-## Example: Semantic Agent Session
-```
-$ blitzcode semantic-agent
-
-Starting session for user: 123e4567-e89b-12d3-a456-426614174000
-
-Enter your query : Scaffold a FastAPI project for a todo app
-BlitzCoder: ... (AI response)
-
-Enter your query : search: todo
-Found 2 relevant memories for query: 'todo'
-...
+```bash
+cd blitz_cli
+pip install -e .
 ```
 
-## API Key Notice
-**You must provide your own API keys for Groq and Gemini models.**
-- For Groq, use the `--groq-api-key` argument or set the `GROQ_API_KEY` environment variable.
-- For Gemini, set the `GOOGLE_API_KEY` environment variable.
-- Never share your API keys publicly.
+### Option 3: Direct Script Execution
 
-## Demo Video
+```bash
+# Windows
+python scripts/blitzcoder.bat
 
-[![Watch the demo](demo.png)](demo.mp4)
+# Linux/Mac
+python scripts/blitzcoder
+```
 
-> **Video Placeholder:**
-> - Place your demo video as `demo.mp4` in this directory.
-> - Add a thumbnail image as `demo.png` if desired.
+## Quick Start
 
-## Description
-Blitzcode CLI is designed for developers who want to:
-- Rapidly scaffold and generate code projects using AI
-- Interactively query, refactor, and explain code
-- Automate repetitive coding and project setup tasks
-- Keep sensitive files safe with .agentignore
-- Enjoy a modern, colorized CLI experience
+### 1. Set up your API Keys
+
+You'll need a Google API key for the Gemini model:
+
+```bash
+# Set environment variable
+export GOOGLE_API_KEY="your-api-key-here"
+
+# Or on Windows
+set GOOGLE_API_KEY=your-api-key-here
+```
+
+### 2. Start Interactive Chat
+
+```bash
+blitzcoder chat
+```
+
+### 3. Search Memories
+
+```bash
+blitzcoder search-memories --query "your search term"
+```
+
+## Usage Examples
+
+### Interactive Chat Mode
+
+```bash
+blitzcoder chat
+```
+
+This starts an interactive session where you can:
+- Ask questions about code
+- Request code generation
+- Get help with refactoring
+- Search through previous conversations
+
+### Search Previous Conversations
+
+```bash
+blitzcoder search-memories --query "React component"
+```
+
+### Use with API Key Parameter
+
+```bash
+blitzcoder chat --google-api-key "your-api-key"
+```
+
+## Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `chat` | Start interactive AI chat session |
+| `search-memories` | Search through conversation history |
+
+## Development
+
+### Project Structure
+
+```
+blitz_cli/
+├── src/
+│   └── blitzcoder/
+│       ├── cli/
+│       │   ├── __init__.py
+│       │   └── cli_coder.py
+│       └── __init__.py
+├── config/
+│   └── templates/
+├── scripts/
+│   ├── blitzcoder
+│   └── blitzcoder.bat
+├── setup.py
+├── pyproject.toml
+└── install.py
+```
+
+### Running Tests
+
+```bash
+# Install development dependencies
+pip install -e ".[dev]"
+
+# Run tests
+pytest
+```
+
+### Code Formatting
+
+```bash
+# Format code
+black src/
+isort src/
+
+# Type checking
+mypy src/
+```
+
+## Configuration
+
+The package uses environment variables for configuration:
+
+- `GOOGLE_API_KEY` - Required for Gemini model access
+- `GROQ_API_KEY` - Optional for additional models
+- `NOVITA_API_KEY` - Optional for embeddings
 
 ## Contributing
-Pull requests are welcome! For major changes, please open an issue first to discuss what you would like to change.
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
 
 ## License
-[MIT](../LICENSE) 
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Support
+
+- 📧 Email: raghunandanerukulla@gmail.com
+- 🐛 Issues: [GitHub Issues](https://github.com/Raghu6798/BlitzCoder/issues)
+- 📖 Documentation: [GitHub README](https://github.com/Raghu6798/BlitzCoder#readme)
+
+## Acknowledgments
+
+- Built with [LangGraph](https://github.com/langchain-ai/langgraph)
+- Powered by [Google Gemini](https://ai.google.dev/)
+- Enhanced with [Rich](https://github.com/Textualize/rich) for beautiful CLI output 
