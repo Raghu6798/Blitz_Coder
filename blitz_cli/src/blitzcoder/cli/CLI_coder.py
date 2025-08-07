@@ -28,7 +28,6 @@ import json
 
 # from langfuse.langchain import CallbackHandler
 # from langfuse import Langfuse
-from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
 
 from rich.console import Console
 from rich.tree import Tree
@@ -39,7 +38,6 @@ from rich.progress import Progress, SpinnerColumn, BarColumn, TimeElapsedColumn
 from rich.text import Text
 from rich.table import Table
 from rich.live import Live
-
 
 
 from langgraph.graph import StateGraph, START, END, MessagesState
@@ -59,14 +57,72 @@ from dotenv import load_dotenv
 from loguru import logger
 
 
-from langchain_groq import ChatGroq
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
+
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_huggingface import HuggingFaceEmbeddings
 
+from e2b_code_interpreter import Sandbox
+
+try:
+    from google.api_core import exceptions as google_exceptions
+except ImportError:
+    class google_exceptions:
+        InternalServerError = type("InternalServerError", (Exception,), {})
+        ServiceUnavailable = type("ServiceUnavailable", (Exception,), {})
+        DeadlineExceeded = type("DeadlineExceeded", (Exception,), {})
+        ResourceExhausted = type("ResourceExhausted", (Exception,), {})
+        Aborted = type("Aborted", (Exception,), {})
 
 load_dotenv()
+# Add this class definition after your imports
 
-# Configure loguru for colorful output (default is colorful in terminal)
+# Define the specific exceptions to retry on (500s, 503s, timeouts, rate limits)
+RETRYABLE_EXCEPTIONS = (
+    google_exceptions.InternalServerError,   # 500 - Internal Server Error
+    google_exceptions.ServiceUnavailable,    # 503 - Service Unavailable
+    google_exceptions.DeadlineExceeded,      # 504 / Client-side Timeout
+    google_exceptions.ResourceExhausted,     # 429 - Rate Limiting
+    google_exceptions.Aborted,               # Other transient connection errors
+)
+
+class RetryingChatGoogleGenerativeAI(ChatGoogleGenerativeAI):
+    """
+    A ChatGoogleGenerativeAI subclass that automatically retries API calls
+    on specific, transient errors using an exponential backoff strategy.
+    """
+    @retry(
+        # Wait with exponential backoff, starting at 2s, up to 60s between retries.
+        wait=wait_exponential(multiplier=1, min=2, max=60),
+        # Retry up to 5 times before giving up.
+        stop=stop_after_attempt(5),
+        # Only retry on the specified Google API exceptions.
+        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        # If all retries fail, re-raise the last exception.
+        reraise=True
+    )
+    def invoke(self, *args, **kwargs):
+        return super().invoke(*args, **kwargs)
+
+    @retry(
+        wait=wait_exponential(multiplier=1, min=2, max=60),
+        stop=stop_after_attempt(5),
+        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        reraise=True
+    )
+    async def ainvoke(self, *args, **kwargs):
+        return await super().ainvoke(*args, **kwargs)
+
+    @retry(
+        wait=wait_exponential(multiplier=1, min=2, max=60),
+        stop=stop_after_attempt(5),
+        retry=retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+        reraise=True
+    )
+    def stream(self, *args, **kwargs):
+        yield from super().stream(*args, **kwargs)
+
 logger.add(
     lambda msg: print(msg, end=""),
     colorize=True,
@@ -75,15 +131,12 @@ logger.add(
     else "<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{message}</cyan>",
 )
 model_name = "sentence-transformers/all-mpnet-base-v2"
-model_kwargs = {'device': 'cpu'}
-encode_kwargs = {'normalize_embeddings': False}
+model_kwargs = {"device": "cpu"}
+encode_kwargs = {"normalize_embeddings": False}
 hf = HuggingFaceEmbeddings(
-    model_name=model_name,
-    model_kwargs=model_kwargs,
-    encode_kwargs=encode_kwargs
+    model_name=model_name, model_kwargs=model_kwargs, encode_kwargs=encode_kwargs
 )
 
-# Global variable to store the initialized model
 gemini_2_flash = None
 
 def initialize_gemini_2_flash(api_key: str = None):
@@ -93,48 +146,27 @@ def initialize_gemini_2_flash(api_key: str = None):
         api_key_to_use = api_key
     else:
         api_key_to_use = os.getenv("GOOGLE_API_KEY")
-    
+
     if not api_key_to_use:
-        raise ValueError("GOOGLE_API_KEY is required to initialize Gemini 2.0 Flash model")
-    
-    gemini_2_flash = ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash",
-        api_key=api_key_to_use,
-        max_tokens=100000
+        raise ValueError(
+            "GOOGLE_API_KEY is required to initialize Gemini 2.0 Flash model"
+        )
+
+    gemini_2_flash =RetryingChatGoogleGenerativeAI(
+        model="gemini-2.5-flash", api_key=api_key_to_use, max_tokens=100000
     )
     return gemini_2_flash
 
-def get_gemini_2_flash():
-    """Get the initialized Gemini 2.0 Flash model"""
+
+def get_gemini_25_flash():
+    """Get the initialized Gemini 2.5 Flash model"""
     global gemini_2_flash
     if gemini_2_flash is None:
-        # Try to initialize with environment variable
         initialize_gemini_2_flash()
     return gemini_2_flash
 
+
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-# @retry(
-#     stop=stop_after_attempt(3),
-#     wait=wait_fixed(2),
-#     retry=retry_if_exception_type((requests.exceptions.RequestException,)),
-#     reraise=True,
-# )
-# def init_langfuse():
-#     return Langfuse(
-#         public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
-#         secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
-#         host="https://us.cloud.langfuse.com",
-#     )
-
-
-# try:
-#     langfuse = init_langfuse()
-#     langfuse_handler = CallbackHandler()
-# except Exception as e:
-#     logger.warning(f"Langfuse initialization failed after retries: {e}")
-#     langfuse = None
-#     langfuse_handler = None
-
 
 console = Console()
 
@@ -151,7 +183,7 @@ def print_welcome_banner():
 
       """,
         style="orange1",
-        justify="center"
+        justify="center",
     )
     panel = Panel(
         banner_text,
@@ -160,28 +192,38 @@ def print_welcome_banner():
         border_style="orange1",
         width=140,
         expand=True,
-        padding=(2, 0)
+        padding=(2, 0),
     )
     console.print(panel)
+
 
 def show_success(msg):
     console.print(Panel(f"[green]✅ {msg}", title="Success", style="green"))
 
+
 def show_error(msg):
     console.print(Panel(f"[red]❌ {msg}", title="Error", style="red"))
+
 
 def show_info(msg):
     console.print(f"[cyan]{msg}[/cyan]")
 
-    
+
 def print_agent_response(text: str, title: str = "BlitzCoder"):
     """Display agent output inside a Rich panel box with orange color"""
-    console.print(Panel.fit(Markdown(text), title=f"[bold orange1]{title}[/bold orange1]", border_style="orange1"))
+    console.print(
+        Panel.fit(
+            Markdown(text),
+            title=f"[bold orange1]{title}[/bold orange1]",
+            border_style="orange1",
+        )
+    )
 
 
 def show_code(code: str, lang: str = "python"):
     syntax = Syntax(code, lang, theme="monokai", line_numbers=True)
     console.print(syntax)
+
 
 def build_rich_tree(root_path: str) -> Tree:
     root_name = os.path.basename(os.path.abspath(root_path))
@@ -202,8 +244,14 @@ def build_rich_tree(root_path: str) -> Tree:
     add_nodes(root_path, tree)
     return tree
 
+
 def simulate_progress(task_desc: str):
-    with Progress(SpinnerColumn(), "[progress.description]{task.description}", BarColumn(), TimeElapsedColumn()) as progress:
+    with Progress(
+        SpinnerColumn(),
+        "[progress.description]{task.description}",
+        BarColumn(),
+        TimeElapsedColumn(),
+    ) as progress:
         task = progress.add_task(f"[green]{task_desc}", total=100)
         while not progress.finished:
             progress.update(task, advance=5)
@@ -218,7 +266,7 @@ class PersistentPowerShell:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             universal_newlines=True,
-            bufsize=1
+            bufsize=1,
         )
         self.lock = threading.Lock()
 
@@ -242,7 +290,7 @@ class PersistentPowerShell:
             self.process.stdin.flush()
             self.process.terminate()
             self.process.wait()
-            
+
 
 ps = PersistentPowerShell()
 
@@ -258,14 +306,14 @@ class AgentState(MessagesState):
 # Semantic memory store for user memories, using Google Gemini embeddings
 
 model_name = "sentence-transformers/all-mpnet-base-v2"
-model_kwargs = {'device': 'cpu'}
+model_kwargs = {"device": "cpu"}
 semantic_memory_store = InMemoryStore(
     index={
         "embed": HuggingFaceEmbeddings(
-    model_name=model_name,
-    model_kwargs=model_kwargs,
-    encode_kwargs=encode_kwargs
-),
+            model_name=model_name,
+            model_kwargs=model_kwargs,
+            encode_kwargs=encode_kwargs,
+        ),
         "dims": 768,  # Google embedding dimension
         "fields": ["memory", "$"],  # Fields to embed
     }
@@ -302,6 +350,7 @@ def send_error_logs_to_agent(error_logs):
     show_info("\n--- Gemini Response ---")
     show_info(response.content)
 
+
 @tool
 def windows_powershell_command(command: str) -> str:
     """
@@ -310,9 +359,10 @@ def windows_powershell_command(command: str) -> str:
     Args :
      command (str) : Windows Command to execute
     Return :
-     Output (str) : Output after executing the command 
+     Output (str) : Output after executing the command
     """
     return ps.run_command(command)
+
 
 @tool
 def inspect_a_file(path: str):
@@ -463,16 +513,22 @@ def extract_content_within_a_file(path: str):
         str: The content of the file as a string, or an error message if the file cannot be read.
     """
     try:
-        show_info(f"Extracting content from file: {os.path.relpath(path, PROJECT_ROOT)}")
+        show_info(
+            f"Extracting content from file: {os.path.relpath(path, PROJECT_ROOT)}"
+        )
         with open(path, "r", encoding="utf-8") as f:
             content = f.read()
-        show_info(f"Successfully extracted content from {os.path.relpath(path, PROJECT_ROOT)}")
+        show_info(
+            f"Successfully extracted content from {os.path.relpath(path, PROJECT_ROOT)}"
+        )
         return content
     except FileNotFoundError:
         show_error(f"File not found: {os.path.relpath(path, PROJECT_ROOT)}")
         return f"Error: File not found: {os.path.relpath(path, PROJECT_ROOT)}"
     except UnicodeDecodeError:
-        show_error(f"Could not decode file (not UTF-8): {os.path.relpath(path, PROJECT_ROOT)}")
+        show_error(
+            f"Could not decode file (not UTF-8): {os.path.relpath(path, PROJECT_ROOT)}"
+        )
         return f"Error: Could not decode file (not UTF-8): {os.path.relpath(path, PROJECT_ROOT)}"
     except Exception as e:
         show_error(f"Error reading file {os.path.relpath(path, PROJECT_ROOT)}: {e}")
@@ -537,8 +593,6 @@ def navigate_entire_codebase_given_path(path: str):
                 file_list.append(os.path.relpath(os.path.join(root, name), path))
     return file_list
 
-  
-
 
 # 2. Tool definition
 @tool
@@ -599,6 +653,60 @@ def run_uvicorn_and_capture_logs(
     process.wait()
     show_info("Uvicorn process terminated.")
     return logs
+
+
+@tool
+def run_shell_command_in_sandbox(
+    command: str, cwd: str = "/", timeout: int = 60
+) -> str:
+    """
+    Executes a shell command (like ls, git, ruff, find, curl, etc even more) in a secure, isolated sandbox.
+    This is the ONLY safe way to run general-purpose shell commands.
+    The sandbox is ephemeral, has a full filesystem, and common command-line tools installed.
+
+    Args:
+        command (str): The shell command to execute.
+        cwd (str): The working directory in the sandbox where the command should be run. Defaults to '/'.
+        timeout (int): The maximum time in seconds to wait for the command to complete.
+
+    Returns:
+        str: A JSON string containing the command's 'stdout', 'stderr', and 'exit_code'.
+    """
+    show_info(f"Executing shell command in E2B sandbox: '{command}'")
+    try:
+        # Use the 'with' statement for a clean, secure sandbox for each execution.
+        with Sandbox() as sandbox:
+            exec_result = sandbox.commands.run(command, cwd=cwd, timeout=timeout)
+
+            output = {
+                "stdout": exec_result.stdout,
+                "stderr": exec_result.stderr,
+                "exit_code": exec_result.exit_code,
+            }
+
+            if exec_result.exit_code != 0:
+                show_error(
+                    f"Sandbox shell command failed with exit code {exec_result.exit_code}."
+                )
+                # Optionally show stderr to the user for immediate feedback
+                if exec_result.stderr:
+                    console.print(
+                        Panel(
+                            exec_result.stderr,
+                            title="[bold red]Stderr[/bold red]",
+                            border_style="red",
+                        )
+                    )
+            else:
+                show_success("Sandbox shell command executed successfully.")
+
+            return json.dumps(output, indent=2)
+
+    except Exception as e:
+        error_msg = f"An infrastructure error occurred while trying to run the shell command in the sandbox: {e}"
+        show_error(error_msg)
+        traceback.print_exc()
+        return json.dumps({"error": error_msg, "exit_code": -1})
 
 
 @tool
@@ -742,38 +850,44 @@ def validate_project_structure(tree_structure: str) -> bool:
     Validate that the generated project structure is not overly complex.
     Returns True if the structure is acceptable, False if it's too complex.
     """
-    lines = tree_structure.strip().split('\n')
+    lines = tree_structure.strip().split("\n")
     file_count = 0
     max_depth = 0
-    
+
     for line in lines:
         line = line.strip()
         if not line:
             continue
-            
+
         # Count files (lines that don't end with /)
-        if not line.endswith('/') and not line.endswith('│') and not line.endswith('├──') and not line.endswith('└──'):
+        if (
+            not line.endswith("/")
+            and not line.endswith("│")
+            and not line.endswith("├──")
+            and not line.endswith("└──")
+        ):
             file_count += 1
-            
+
         # Calculate depth by counting leading spaces or tree characters
         depth = 0
         for char in line:
-            if char in [' ', '│', '├', '└', '─']:
+            if char in [" ", "│", "├", "└", "─"]:
                 depth += 1
             else:
                 break
         max_depth = max(max_depth, depth // 4)  # Approximate depth level
-    
+
     # Reject if too many files or too deep
     if file_count > 25:
         show_error(f"❌ Project structure too complex: {file_count} files (max 25)")
         return False
-        
+
     if max_depth > 5:
         show_error(f"❌ Project structure too deep: {max_depth} levels (max 5)")
         return False
-        
+
     return True
+
 
 @tool
 def generate_project_structure(framework: str, use_case: str) -> str:
@@ -816,21 +930,23 @@ Remember: SIMPLE, PRACTICAL, WORKING - NOT COMPLEX!""",
             ),
         ]
     )
-    
+
     # Try up to 3 times to get a simple structure
     for attempt in range(3):
-        messages = prompt_template.format_messages(framework=framework, use_case=use_case)
+        messages = prompt_template.format_messages(
+            framework=framework, use_case=use_case
+        )
         result = get_gemini_2_flash().invoke(messages)
         match = re.search(tree_pattern, result.content, re.DOTALL)
         tree_structure = match.group(1).strip() if match else result.content
-        
+
         # Validate the structure
         if validate_project_structure(tree_structure):
             show_info(f"✅ Generated simple project structure (attempt {attempt + 1})")
             return tree_structure
         else:
             show_info(f"⚠️ Structure too complex, retrying... (attempt {attempt + 1}/3)")
-    
+
     # If all attempts failed, return a simple fallback structure
     show_error("❌ Failed to generate simple structure, using fallback")
     fallback_structure = f"""
@@ -927,33 +1043,34 @@ Use this exact format:
         framework=framework, use_case=use_case, tree_structure=tree_structure
     )
     result = get_gemini_2_flash().invoke(messages)
-    
+
     # Try multiple regex patterns to extract JSON
     content = result.content.strip()
-    
+
     # Pattern 1: Look for JSON between triple backticks
-    json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', content, re.DOTALL)
+    json_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, re.DOTALL)
     if json_match:
         plan = json_match.group(1).strip()
     else:
         # Pattern 2: Look for JSON starting with { and ending with }
-        json_match = re.search(r'(\{.*\})', content, re.DOTALL)
+        json_match = re.search(r"(\{.*\})", content, re.DOTALL)
         if json_match:
             plan = json_match.group(1).strip()
         else:
             # Pattern 3: If no JSON found, try to use the entire content
             plan = content.strip()
-    
+
     # Validate that we have valid JSON
     try:
         import json
+
         json.loads(plan)
         show_info("✅ Architecture plan created with valid JSON!")
         return plan
     except json.JSONDecodeError as e:
         show_error(f"❌ Invalid JSON in architecture plan: {e}")
         show_error(f"Raw content: {content[:200]}...")
-        
+
         # Return a simple fallback JSON structure
         fallback_plan = {
             "architecture_overview": f"Simple {framework} application for {use_case}",
@@ -962,7 +1079,7 @@ Use this exact format:
                     "name": "Main Application",
                     "purpose": "Core application functionality",
                     "dependencies": [framework],
-                    "files": ["main.py", "config.py", "README.md"]
+                    "files": ["main.py", "config.py", "README.md"],
                 }
             ],
             "file_analysis": {
@@ -970,25 +1087,25 @@ Use this exact format:
                     "purpose": "Main application entry point",
                     "key_features": ["Main function", "Application setup"],
                     "dependencies": [],
-                    "implementation_priority": "high"
+                    "implementation_priority": "high",
                 },
                 "config.py": {
                     "purpose": "Configuration settings",
                     "key_features": ["Settings", "Environment variables"],
                     "dependencies": [],
-                    "implementation_priority": "high"
+                    "implementation_priority": "high",
                 },
                 "README.md": {
                     "purpose": "Project documentation",
                     "key_features": ["Setup instructions", "Usage guide"],
                     "dependencies": [],
-                    "implementation_priority": "low"
-                }
+                    "implementation_priority": "low",
+                },
             },
             "data_flow": "Simple request-response flow",
-            "implementation_order": ["main.py", "config.py", "README.md"]
+            "implementation_order": ["main.py", "config.py", "README.md"],
         }
-        
+
         try:
             plan = json.loads(plan_json)
         except Exception as e:
@@ -997,28 +1114,30 @@ Use this exact format:
 
         file_analysis = plan.get("file_analysis", {})
         all_files = list(file_analysis.keys())
-        
+
         # Limit the number of files to prevent overly complex projects
         if len(all_files) > 25:
-            show_error(f"❌ Too many files in architecture plan: {len(all_files)} (max 25)")
+            show_error(
+                f"❌ Too many files in architecture plan: {len(all_files)} (max 25)"
+            )
             return f"❌ Architecture plan too complex with {len(all_files)} files. Please try again with a simpler use case."
-        
+
         created_files = []
         show_info(f"📝 Generating {len(all_files)} files...")
 
         for i, file_path in enumerate(all_files, 1):
             show_info(f"📄 Creating file {i}/{len(all_files)}: {file_path}")
-            
+
             # Ensure the directory exists
             abs_file_path = os.path.join(project_root, file_path)
             dir_path = os.path.dirname(abs_file_path)
             if dir_path:
                 os.makedirs(dir_path, exist_ok=True)
-            
+
             # Generate the file content
             file_info = file_analysis[file_path]
             show_info(f"🔧 Generating content for {file_path}...")
-            
+
             try:
                 content = generate_file_content.invoke(
                     {
@@ -1034,36 +1153,44 @@ Use this exact format:
                         ),
                     }
                 )
-                
+
                 # Ensure we have valid content
                 if not content or content.strip() == "":
                     show_error(f"⚠️ No content generated for {file_path}")
-                    content = f"// TODO: Implement {file_path} - Content generation failed"
+                    content = (
+                        f"// TODO: Implement {file_path} - Content generation failed"
+                    )
                 elif len(content.strip()) < 10:
-                    show_error(f"⚠️ Minimal content generated for {file_path} (only {len(content)} chars)")
+                    show_error(
+                        f"⚠️ Minimal content generated for {file_path} (only {len(content)} chars)"
+                    )
                     content = f"// TODO: Implement {file_path} - Insufficient content generated"
-                
+
                 show_info(f"💾 Writing {len(content)} characters to {file_path}...")
-                
+
                 # Write the extracted code to the file
                 with open(abs_file_path, "w", encoding="utf-8") as f:
                     f.write(content)
-                
+
                 # Verify the file was written correctly
                 try:
                     with open(abs_file_path, "r", encoding="utf-8") as f:
                         written_content = f.read()
-                    
+
                     if len(written_content) == len(content):
-                        show_info(f"✅ Successfully wrote {len(written_content)} characters to {file_path}")
+                        show_info(
+                            f"✅ Successfully wrote {len(written_content)} characters to {file_path}"
+                        )
                         if len(written_content) < 100:
                             show_info(f"📄 Content preview: {written_content[:100]}...")
                     else:
-                        show_error(f"❌ Content length mismatch for {file_path}: expected {len(content)}, got {len(written_content)}")
-                        
+                        show_error(
+                            f"❌ Content length mismatch for {file_path}: expected {len(content)}, got {len(written_content)}"
+                        )
+
                 except Exception as e:
                     show_error(f"❌ Failed to verify file {file_path}: {e}")
-                
+
             except Exception as e:
                 show_error(f"❌ Error generating content for {file_path}: {e}")
                 # Write a fallback content
@@ -1071,12 +1198,14 @@ Use this exact format:
                 with open(abs_file_path, "w", encoding="utf-8") as f:
                     f.write(fallback_content)
                 show_info(f"💾 Wrote fallback content to {file_path}")
-            
+
             created_files.append(abs_file_path)
             show_info(f"✅ File {i}/{len(all_files)} processed: {file_path}")
 
-        show_success(f"✅ Successfully created {len(created_files)} files at [bold]{os.path.abspath(project_root)}[/bold]")
-        
+        show_success(
+            f"✅ Successfully created {len(created_files)} files at [bold]{os.path.abspath(project_root)}[/bold]"
+        )
+
         # Final verification - show what was written to each file
         show_info("📋 Final verification - Files created with content:")
         for file_path in created_files:
@@ -1087,7 +1216,7 @@ Use this exact format:
                 show_info(f"  📄 {rel_path}: {len(content)} characters")
             except Exception as e:
                 show_error(f"  ❌ {file_path}: Error reading file - {e}")
-        
+
         return f"✅ Project scaffolding completed! {len(created_files)} files created at {os.path.abspath(project_root)}"
 
     except Exception as e:
@@ -1164,11 +1293,14 @@ REQUIREMENTS:
 5. Return raw code only - no markdown, no explanations
 
 Generate the complete code for {file_path} now:"""
-    
+
     content_prompt = ChatPromptTemplate.from_messages(
         [
             ("system", system_prompt),
-            ("user", "Write the complete, production-ready code for {file_path}. Return only the raw code without any markdown formatting."),
+            (
+                "user",
+                "Write the complete, production-ready code for {file_path}. Return only the raw code without any markdown formatting.",
+            ),
         ]
     )
     messages = content_prompt.format_messages(
@@ -1181,59 +1313,85 @@ Generate the complete code for {file_path} now:"""
         data_flow=data_flow,
         dependencies=dependencies,
     )
-    
+
     try:
         result = get_gemini_2_flash().invoke(messages)
     except Exception as e:
         show_error(f"❌ Error calling Gemini model for {file_path}: {e}")
         return f"// TODO: Implement {file_path} - Model error: {e}"
-    
+
     # Debug logging
     show_info(f"🔍 Raw AI response length: {len(result.content)} characters")
     if len(result.content) < 100:
         show_info(f"🔍 Raw AI response preview: {result.content[:100]}...")
-    
+
     # Clean up the response - remove any markdown code blocks if present
     content = result.content.strip()
-    
+
     # Check if we got a valid response
     if not content:
         show_error(f"❌ Empty response from AI for {file_path}")
         return f"// TODO: Implement {file_path} - AI returned empty response"
-    
+
     # Remove markdown code blocks if they exist
     if "```" in content:
         show_info(f"🔍 Detected markdown code blocks in response")
         # Split by code blocks and extract the content
         parts = content.split("```")
-        
+
         # Find the largest code block (usually the main content)
         code_blocks = []
         for i in range(1, len(parts), 2):  # Skip language identifier lines
             if i < len(parts):
                 code_blocks.append(parts[i].strip())
-        
+
         if code_blocks:
             # Use the largest code block
             largest_block = max(code_blocks, key=len)
             content = largest_block
-            
+
             # Remove the language identifier from the first line if present
-            lines = content.split('\n')
-            if lines and (lines[0].strip() in ['java', 'xml', 'properties', 'yaml', 'yml', 'json', 'sql', 'html', 'css', 'js', 'ts', 'py', 'go', 'rs', 'cpp', 'c', 'cs', 'php', 'rb', 'swift', 'kt'] or lines[0].strip().startswith('language:')):
-                content = '\n'.join(lines[1:])
-            
+            lines = content.split("\n")
+            if lines and (
+                lines[0].strip()
+                in [
+                    "java",
+                    "xml",
+                    "properties",
+                    "yaml",
+                    "yml",
+                    "json",
+                    "sql",
+                    "html",
+                    "css",
+                    "js",
+                    "ts",
+                    "py",
+                    "go",
+                    "rs",
+                    "cpp",
+                    "c",
+                    "cs",
+                    "php",
+                    "rb",
+                    "swift",
+                    "kt",
+                ]
+                or lines[0].strip().startswith("language:")
+            ):
+                content = "\n".join(lines[1:])
+
             show_info(f"🔍 After removing markdown blocks: {len(content)} characters")
         else:
             show_info(f"🔍 No valid code blocks found, using raw content")
-    
+
     final_content = content.strip()
     show_info(f"🔍 Final content length: {len(final_content)} characters")
-    
+
     if not final_content:
         show_error(f"❌ No content after processing for {file_path}")
         return f"// TODO: Implement {file_path} - Content processing failed"
-    
+
     return final_content
 
 
@@ -1409,7 +1567,9 @@ def create_or_delete_file(path: str):
             show_info(f"Created empty file: {os.path.relpath(path, PROJECT_ROOT)}")
             return f"Created empty file: {os.path.relpath(path, PROJECT_ROOT)}"
     except Exception as e:
-        show_error(f"Error in create_or_delete_file for {os.path.relpath(path, PROJECT_ROOT)}: {e}")
+        show_error(
+            f"Error in create_or_delete_file for {os.path.relpath(path, PROJECT_ROOT)}: {e}"
+        )
         return f"Error in create_or_delete_file for {os.path.relpath(path, PROJECT_ROOT)}: {e}"
 
 
@@ -1426,19 +1586,19 @@ def scaffold_and_generate_files(
             # Sanitize framework name for folder
             safe_framework = framework.lower().replace(" ", "_")
             project_root = f"./{safe_framework}_project"
-        
+
         show_info(f"🚀 Starting project scaffolding for {framework} - {use_case}")
-        
+
         # Step 1: Generate the project structure
         show_info("📁 Generating project structure...")
         tree_structure = generate_project_structure.invoke(
             {"framework": framework, "use_case": use_case}
         )
-        
+
         # Validate the structure before proceeding
         if not validate_project_structure(tree_structure):
             return f"❌ Project structure validation failed. Please try again with a simpler use case."
-        
+
         # Step 2: Generate the architecture plan
         show_info("🏗️ Generating architecture plan...")
         plan_json = generate_architecture_plan.invoke(
@@ -1448,8 +1608,9 @@ def scaffold_and_generate_files(
                 "tree_structure": tree_structure,
             }
         )
-        
+
         import json
+
         try:
             plan = json.loads(plan_json)
         except Exception as e:
@@ -1458,28 +1619,30 @@ def scaffold_and_generate_files(
 
         file_analysis = plan.get("file_analysis", {})
         all_files = list(file_analysis.keys())
-        
+
         # Limit the number of files to prevent overly complex projects
         if len(all_files) > 25:
-            show_error(f"❌ Too many files in architecture plan: {len(all_files)} (max 25)")
+            show_error(
+                f"❌ Too many files in architecture plan: {len(all_files)} (max 25)"
+            )
             return f"❌ Architecture plan too complex with {len(all_files)} files. Please try again with a simpler use case."
-        
+
         created_files = []
         show_info(f"📝 Generating {len(all_files)} files...")
 
         for i, file_path in enumerate(all_files, 1):
             show_info(f"📄 Creating file {i}/{len(all_files)}: {file_path}")
-            
+
             # Ensure the directory exists
             abs_file_path = os.path.join(project_root, file_path)
             dir_path = os.path.dirname(abs_file_path)
             if dir_path:
                 os.makedirs(dir_path, exist_ok=True)
-            
+
             # Generate the file content
             file_info = file_analysis[file_path]
             show_info(f"🔧 Generating content for {file_path}...")
-            
+
             try:
                 content = generate_file_content.invoke(
                     {
@@ -1495,36 +1658,44 @@ def scaffold_and_generate_files(
                         ),
                     }
                 )
-                
+
                 # Ensure we have valid content
                 if not content or content.strip() == "":
                     show_error(f"⚠️ No content generated for {file_path}")
-                    content = f"// TODO: Implement {file_path} - Content generation failed"
+                    content = (
+                        f"// TODO: Implement {file_path} - Content generation failed"
+                    )
                 elif len(content.strip()) < 10:
-                    show_error(f"⚠️ Minimal content generated for {file_path} (only {len(content)} chars)")
+                    show_error(
+                        f"⚠️ Minimal content generated for {file_path} (only {len(content)} chars)"
+                    )
                     content = f"// TODO: Implement {file_path} - Insufficient content generated"
-                
+
                 show_info(f"💾 Writing {len(content)} characters to {file_path}...")
-                
+
                 # Write the extracted code to the file
                 with open(abs_file_path, "w", encoding="utf-8") as f:
                     f.write(content)
-                
+
                 # Verify the file was written correctly
                 try:
                     with open(abs_file_path, "r", encoding="utf-8") as f:
                         written_content = f.read()
-                    
+
                     if len(written_content) == len(content):
-                        show_info(f"✅ Successfully wrote {len(written_content)} characters to {file_path}")
+                        show_info(
+                            f"✅ Successfully wrote {len(written_content)} characters to {file_path}"
+                        )
                         if len(written_content) < 100:
                             show_info(f"📄 Content preview: {written_content[:100]}...")
                     else:
-                        show_error(f"❌ Content length mismatch for {file_path}: expected {len(content)}, got {len(written_content)}")
-                        
+                        show_error(
+                            f"❌ Content length mismatch for {file_path}: expected {len(content)}, got {len(written_content)}"
+                        )
+
                 except Exception as e:
                     show_error(f"❌ Failed to verify file {file_path}: {e}")
-                
+
             except Exception as e:
                 show_error(f"❌ Error generating content for {file_path}: {e}")
                 # Write a fallback content
@@ -1532,12 +1703,14 @@ def scaffold_and_generate_files(
                 with open(abs_file_path, "w", encoding="utf-8") as f:
                     f.write(fallback_content)
                 show_info(f"💾 Wrote fallback content to {file_path}")
-            
+
             created_files.append(abs_file_path)
             show_info(f"✅ File {i}/{len(all_files)} processed: {file_path}")
 
-        show_success(f"✅ Successfully created {len(created_files)} files at [bold]{os.path.abspath(project_root)}[/bold]")
-        
+        show_success(
+            f"✅ Successfully created {len(created_files)} files at [bold]{os.path.abspath(project_root)}[/bold]"
+        )
+
         # Final verification - show what was written to each file
         show_info("📋 Final verification - Files created with content:")
         for file_path in created_files:
@@ -1548,7 +1721,7 @@ def scaffold_and_generate_files(
                 show_info(f"  📄 {rel_path}: {len(content)} characters")
             except Exception as e:
                 show_error(f"  ❌ {file_path}: Error reading file - {e}")
-        
+
         return f"✅ Project scaffolding completed! {len(created_files)} files created at {os.path.abspath(project_root)}"
 
     except Exception as e:
@@ -1558,6 +1731,9 @@ def scaffold_and_generate_files(
 
 SYSTEM_PROMPT = """
 You are BlitzCoder, an expert AI code agent for developers. You have access to the following tools to help with code inspection, execution, refactoring, project scaffolding, and more:
+
+**Your Core Directive: Be decisive and take action.**
+Do not ask for confirmation before using a tool. If you determine a tool is necessary to answer the user's request, call it directly and immediately. The user has given you full permission to use your tools as needed.
 
 You are a totally framework-agnostic coding agent
 
@@ -1587,7 +1763,8 @@ ruff format  # Format all files in the current directory.
 - generate_folder_creation_script(tree_structure: str): Generates a Python script to create a folder structure.
 - generate_file_content(...): Generates code for a specific file based on project context.
 - explain_code(path: str): Explains what a code file does.
-- run_shell_commands(command: str, cwd: str, timeout: int): Runs a shell command and returns logs.
+- run_shell_commands(command: str, cwd: str, timeout: int): Runs a shell command and returns logs. But this is not secure 
+- run_shell_command_in_sandbox(command: str, cwd: str = "/", timeout: int = 60): Executes shell commands like `ls`, `mkdir`, `pip`, and `ruff` and can even execute any shell commands in a sandboxed environment.
 - agent_refactor_code(path: str): Refactors and fixes errors in a Python file.
 - create_project_structure_at_path(tree_structure: str, sub_root_dir: str): Creates a project structure at a path.
 - look_for_file_or_directory(name: str, root_path: str): Searches for a file or directory by name.
@@ -1619,21 +1796,19 @@ tools = [
     write_code_to_file,
     inspect_a_file,
     look_for_directory,
-    windows_powershell_command
+    windows_powershell_command,
+    run_shell_command_in_sandbox,
 ]
+
 
 def get_gemini_model():
     """Get the Gemini model with the current API key from environment"""
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
         raise ValueError("GOOGLE_API_KEY environment variable is not set")
-    return ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash", 
-        api_key=api_key, 
-        max_tokens=100000
+    return RetryingChatGoogleGenerativeAI(
+        model="gemini-2.5-flash", api_key=api_key, max_tokens=100000
     )
-
-
 
 
 def update_memory(state: AgentState, config: RunnableConfig, *, store: BaseStore):
@@ -1724,7 +1899,7 @@ def enhanced_tool_calling_llm(
     """Enhanced LLM call that considers semantic memory and always prepends the SYSTEM_PROMPT."""
     # First retrieve relevant context
     enhanced_state = retrieve_and_enhance_context(state, config, store=store)
-    
+
     # Always prepend SYSTEM_PROMPT as the first message
     messages = enhanced_state["messages"]
     # Remove any previous system messages
@@ -1735,7 +1910,7 @@ def enhanced_tool_calling_llm(
     ]
     # Prepend SYSTEM_PROMPT
     messages = [SystemMessage(content=SYSTEM_PROMPT)] + messages
-    
+
     # Create model and bind tools when needed
     gemini_model = get_gemini_model()
     llm_with_tool = gemini_model.bind_tools(tools)
@@ -1763,8 +1938,8 @@ builder.add_edge("update_memory", END)
 
 checkpointer = InMemorySaver()
 
-
 semantic_graph = builder.compile(checkpointer=checkpointer, store=semantic_memory_store)
+
 
 def run_agent_with_memory(query: str, user_id: str = "default", thread_id: str = None):
     """Run the agent with semantic memory"""
@@ -1773,7 +1948,7 @@ def run_agent_with_memory(query: str, user_id: str = "default", thread_id: str =
 
     config = {
         "configurable": {"thread_id": thread_id, "user_id": user_id},
-        "recursion_limit": 100
+        "recursion_limit": 100,
     }
 
     output_buffer = ""
@@ -1785,13 +1960,13 @@ def run_agent_with_memory(query: str, user_id: str = "default", thread_id: str =
         BarColumn(),
         TimeElapsedColumn(),
         console=console,
-        transient=True  # This makes the progress bar disappear after completion
+        transient=True,  # This makes the progress bar disappear after completion
     ) as progress:
         task = progress.add_task("[cyan]Initializing AI agent...", total=None)
-        
+
         # Update progress to show memory retrieval
         progress.update(task, description="[yellow]Retrieving relevant memories...")
-        
+
         for chunk, metadata in semantic_graph.stream(
             {"messages": [HumanMessage(content=query)]},
             config=config,
@@ -1802,28 +1977,26 @@ def run_agent_with_memory(query: str, user_id: str = "default", thread_id: str =
                 if not output_buffer:
                     progress.update(task, description="[green]Receiving AI response...")
                 output_buffer += chunk.content  # Accumulate output
-        
+
         # Stop the progress bar after processing is complete
         progress.stop()
 
     if output_buffer.strip():
-        print_agent_response(output_buffer.strip())
-
+        (output_buffer.strip())
 
 
 def search_memories(user_id: str, query: str, limit: int = 5):
     """Search memories for a specific user"""
     namespace = (user_id, "memories")
-    
+
     # Show progress for memory search
     with Progress(
         SpinnerColumn(),
         "[progress.description]{task.description}",
         BarColumn(),
         TimeElapsedColumn(),
-        console=console
+        console=console,
     ) as progress:
-        
         memories = semantic_memory_store.search(namespace, query=query, limit=limit)
 
     print(f"\nFound {len(memories)} relevant memories for query: '{query}'")
@@ -1837,11 +2010,10 @@ def search_memories(user_id: str, query: str, limit: int = 5):
 
 if __name__ == "_main_":
     print_welcome_banner()
-  
+
     # Get user ID for session
     user_id = str(uuid.uuid4())
     thread_id = str(uuid.uuid4())
-
 
     while True:
         query = input("\nEnter your query : ")
@@ -1854,8 +2026,6 @@ if __name__ == "_main_":
             search_memories(user_id, search_query)
             continue
 
-
-
         run_agent_with_memory(query, user_id, thread_id)
 # --- Console ---
 console = Console()
@@ -1866,43 +2036,27 @@ console = Console()
 class AgentState(MessagesState):
     documents: list[str]
 
-tools = [
-    run_uvicorn_and_capture_logs,
-    current_directory,
-    change_directory,
-    navigate_entire_codebase_given_path,
-    extract_content_within_a_file,
-    refactoring_code,
-    explain_code,
-    execute_python_code,
-    error_detection,
-    agent_refactor_code,
-    run_shell_commands,
-    generate_project_structure,
-    generate_architecture_plan,
-    generate_folder_creation_script,
-    generate_file_content,
-    scaffold_and_generate_files,
-    look_for_file_or_directory,
-    create_or_delete_file,
-    write_code_to_file,
-    inspect_a_file,
-    look_for_directory,
-    windows_powershell_command
-]
 
 def validate_google_api_key(api_key: str) -> bool:
     try:
-        model = ChatGoogleGenerativeAI(model="gemini-2.0-flash", api_key=api_key)
+        model = RetryingChatGoogleGenerativeAI(model="gemini-2.5-flash", api_key=api_key)
         response = model.invoke(["Hello"])  # Simple call
         return True
     except Exception as e:
         print(f"[bold red]API key validation failed:[/bold red] {e}")
         return False
 
+
 def print_agent_response(text: str, title: str = "BlitzCoder"):
     """Display agent output inside a Rich panel box with orange color"""
-    console.print(Panel.fit(Markdown(text), title=f"[bold orange1]{title}[/bold orange1]", border_style="orange1"))
+    console.print(
+        Panel.fit(
+            Markdown(text),
+            title=f"[bold orange1]{title}[/bold orange1]",
+            border_style="orange1",
+        )
+    )
+
 
 def update_memory(state: AgentState, config: RunnableConfig, *, store: BaseStore):
     user_id = config["configurable"].get("user_id", "default")
@@ -1920,7 +2074,9 @@ def update_memory(state: AgentState, config: RunnableConfig, *, store: BaseStore
                 "context": "conversation",
                 "user_query": user_msg.content,
                 "ai_response": ai_msg.content,
-                "timestamp": str(uuid.uuid4()),  # Replace with actual timestamp if needed
+                "timestamp": str(
+                    uuid.uuid4()
+                ),  # Replace with actual timestamp if needed
             }
 
             store.put(
@@ -1933,9 +2089,9 @@ def update_memory(state: AgentState, config: RunnableConfig, *, store: BaseStore
     return state
 
 
-
-
-def retrieve_and_enhance_context(state: AgentState, config: RunnableConfig, *, store: BaseStore):
+def retrieve_and_enhance_context(
+    state: AgentState, config: RunnableConfig, *, store: BaseStore
+):
     user_id = config["configurable"].get("user_id", "default")
     namespace = (user_id, "memories")
     latest_message = state["messages"][-1]
@@ -1945,7 +2101,8 @@ def retrieve_and_enhance_context(state: AgentState, config: RunnableConfig, *, s
         memories = store.search(namespace, query=query, limit=5)
         if memories:
             memory_context = [
-                f"Previous context: {memory.value.get('memory', '')}" for memory in memories
+                f"Previous context: {memory.value.get('memory', '')}"
+                for memory in memories
             ]
             context_info = "\n".join(memory_context)
             enhanced_query = f"""Based on our previous conversations:
@@ -1955,25 +2112,29 @@ Current question: {query}
 
 Please respond considering our conversation history and any relevant context from previous interactions."""
 
-            enhanced_messages = state["messages"][:-1] + [HumanMessage(content=enhanced_query)]
+            enhanced_messages = state["messages"][:-1] + [
+                HumanMessage(content=enhanced_query)
+            ]
             return {"messages": enhanced_messages}
 
     return state
 
-def enhanced_tool_calling_llm(state: AgentState, config: RunnableConfig, *, store: BaseStore):
+
+def enhanced_tool_calling_llm(
+    state: AgentState, config: RunnableConfig, *, store: BaseStore
+):
     api_key = os.environ.get("GOOGLE_API_KEY")
     if not api_key:
         raise RuntimeError("GOOGLE_API_KEY is not set. Please provide it.")
 
-    gemini_model = ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash",
-        api_key=api_key,
-        max_tokens=100000
+    gemini_model = RetryingChatGoogleGenerativeAI(
+        model="gemini-2.5-flash", api_key=api_key, max_tokens=100000
     )
 
     enhanced_state = retrieve_and_enhance_context(state, config, store=store)
     messages = [
-        msg for msg in enhanced_state["messages"]
+        msg
+        for msg in enhanced_state["messages"]
         if not (hasattr(msg, "role") and getattr(msg, "role", None) == "system")
     ]
     messages = [SystemMessage(content=SYSTEM_PROMPT)] + messages
@@ -1981,17 +2142,21 @@ def enhanced_tool_calling_llm(state: AgentState, config: RunnableConfig, *, stor
     response = llm_with_tool.invoke(messages)
     return {"messages": [response]}
 
+
 builder = StateGraph(AgentState)
 builder.add_node("enhanced_llm", enhanced_tool_calling_llm)
 builder.add_node("update_memory", update_memory)
 builder.add_node("tools", ToolNode(tools))
 builder.add_edge(START, "enhanced_llm")
-builder.add_conditional_edges("enhanced_llm", tools_condition, {"tools": "tools", "__end__": "update_memory"})
+builder.add_conditional_edges(
+    "enhanced_llm", tools_condition, {"tools": "tools", "__end__": "update_memory"}
+)
 builder.add_edge("tools", "enhanced_llm")
 builder.add_edge("update_memory", END)
 
 checkpointer = InMemorySaver()
 semantic_graph = builder.compile(checkpointer=checkpointer, store=semantic_memory_store)
+
 
 def run_agent_with_memory(query: str, user_id: str = "default", thread_id: str = None):
     if thread_id is None:
@@ -1999,7 +2164,7 @@ def run_agent_with_memory(query: str, user_id: str = "default", thread_id: str =
 
     config = {
         "configurable": {"thread_id": thread_id, "user_id": user_id},
-        "recursion_limit": 100
+        "recursion_limit": 100,
     }
 
     output_buffer = ""
@@ -2010,7 +2175,7 @@ def run_agent_with_memory(query: str, user_id: str = "default", thread_id: str =
         BarColumn(),
         TimeElapsedColumn(),
         console=console,
-        transient=True
+        transient=True,
     ) as progress:
         task = progress.add_task("[cyan]Initializing AI agent...", total=None)
         progress.update(task, description="[yellow]Retrieving relevant memories...")
@@ -2030,13 +2195,15 @@ def run_agent_with_memory(query: str, user_id: str = "default", thread_id: str =
     if output_buffer.strip():
         print_agent_response(output_buffer.strip())
 
+
 @click.group()
 def cli():
     """BlitzCoder CLI - AI-Powered Dev Assistant"""
     pass
 
+
 @cli.command()
-@click.option('--google-api-key', help='Google API key for Gemini model')
+@click.option("--google-api-key", help="Google API key for Gemini model")
 def chat(google_api_key):
     """Start interactive chat with BlitzCoder AI agent."""
     if google_api_key:
@@ -2053,7 +2220,9 @@ def chat(google_api_key):
             console.print("[bold red]❌ Invalid API key. Please try again.[/bold red]")
             exit(1)
     else:
-        google_api_key = Prompt.ask("🔑 [bold green]Paste your API key[/bold green]", password=True)
+        google_api_key = Prompt.ask(
+            "🔑 [bold green]Paste your Gemini API key[/bold green]", password=True
+        )
         if validate_google_api_key(google_api_key):
             os.environ["GOOGLE_API_KEY"] = google_api_key
             # Initialize Gemini 2.0 Flash model
@@ -2072,7 +2241,9 @@ def chat(google_api_key):
     thread_id = str(uuid.uuid4())
 
     while True:
-        query = Prompt.ask("[bold orange1]Enter your query[/bold orange1]", console=console)
+        query = Prompt.ask(
+            "[bold orange1]Enter your query[/bold orange1]", console=console
+        )
         if query.lower() in {"bye", "exit"}:
             show_info("Exiting interactive agent loop.")
             break
@@ -2082,10 +2253,11 @@ def chat(google_api_key):
             continue
         run_agent_with_memory(query, user_id, thread_id)
 
+
 @cli.command()
-@click.option('--user-id', default=None, help='User ID for memory search')
-@click.option('--query', prompt='Search query', help='Query to search in memories')
-@click.option('--google-api-key', help='Google API key for Gemini model')
+@click.option("--user-id", default=None, help="User ID for memory search")
+@click.option("--query", prompt="Search query", help="Query to search in memories")
+@click.option("--google-api-key", help="Google API key for Gemini model")
 def search_memories_cli(user_id, query, google_api_key):
     """Search your agent memories."""
     if google_api_key:
@@ -2098,12 +2270,16 @@ def search_memories_cli(user_id, query, google_api_key):
             show_error(f"❌ Failed to initialize Gemini 2.0 Flash model: {e}")
             exit(1)
     else:
-        console.print(Panel.fit(
-            "[bold orange1]🔑 Google API Key Required[/bold orange1]\n\n"
-            "Please paste your API key below (input is hidden):",
-            border_style="red"
-        ))
-        google_api_key = Prompt.ask("🔑 [bold green]Paste your API key[/bold green]", password=True)
+        console.print(
+            Panel.fit(
+                "[bold orange1]🔑 Google API Key Required[/bold orange1]\n\n"
+                "Please paste your API key below (input is hidden):",
+                border_style="red",
+            )
+        )
+        google_api_key = Prompt.ask(
+            "🔑 [bold green]Paste your API key[/bold green]", password=True
+        )
         if validate_google_api_key(google_api_key):
             os.environ["GOOGLE_API_KEY"] = google_api_key
             # Initialize Gemini 2.0 Flash model
@@ -2120,6 +2296,7 @@ def search_memories_cli(user_id, query, google_api_key):
     if not user_id:
         user_id = str(uuid.uuid4())
     search_memories(user_id, query)
+
 
 if __name__ == "__main__":
     cli()
