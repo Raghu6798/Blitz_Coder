@@ -1,6 +1,11 @@
+
+
+<img width="1079" height="387" alt="Screenshot 2025-06-29 003938" src="https://github.com/user-attachments/assets/52133037-4f09-4b50-82da-246adc5fc13f" />
+
+
 # BlitzCoder
 
-⚡ **AI-Powered Development Assistant** - A comprehensive CLI tool for code generation, refactoring, and project management.
+**AI-Powered Development Assistant** - A comprehensive CLI tool for code generation, refactoring, and project management.
 
 ## Features
 
@@ -174,3 +179,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Built with [LangGraph](https://github.com/langchain-ai/langgraph)
 - Powered by [Google Gemini](https://ai.google.dev/)
 - Enhanced with [Rich](https://github.com/Textualize/rich) for beautiful CLI output 
+
