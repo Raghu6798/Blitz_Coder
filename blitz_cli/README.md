@@ -1,6 +1,8 @@
+<img width="1114" height="400" alt="image" src="https://github.com/user-attachments/assets/71b213f1-eb8d-48d9-b4fa-8d797e02bc86" />
+
 # BlitzCoder
 
-⚡ **AI-Powered Development Assistant** - A comprehensive CLI tool for code generation, refactoring, and project management.
+**AI-Powered Development Assistant** - A comprehensive CLI tool for code generation, refactoring, and project management.
 
 ## Features
 
