@@ -49,12 +49,18 @@ python scripts/blitzcoder
 
 You'll need a Google API key for the Gemini model:
 
-```bash
-# Set environment variable
-export GOOGLE_API_KEY="your-api-key-here"
 
-# Or on Windows
-set GOOGLE_API_KEY=your-api-key-here
+### Quick Start
+1. Set up your API Keys
+BlitzCoder requires two API keys to function. It will prompt you for them on the first run, or you can set them as environment variables.
+Google Gemini API Key: For the core AI reasoning.
+```
+export GOOGLE_API_KEY=your-gemini-api-key
+```
+E2B Sandbox API Key: For secure command execution. Get a free key at e2b.dev.
+
+```
+export E2B_API_KEY=your-e2b-api-key
 ```
 
 ### 2. Start Interactive Chat
@@ -189,4 +195,5 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Built with [LangGraph](https://github.com/langchain-ai/langgraph)
 - Powered by [Google Gemini](https://ai.google.dev/)
 - Enhanced with [Rich](https://github.com/Textualize/rich) for beautiful CLI output 
+
 
