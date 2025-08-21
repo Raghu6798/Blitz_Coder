@@ -1,12 +1,8 @@
-
-
 <img width="1114" height="400" alt="image" src="https://github.com/user-attachments/assets/23fd7541-a192-4e0e-b7bb-121ea6e40139" />
-
-
 
 # BlitzCoder
 
-**AI-Powered Development Assistant** - A comprehensive CLI tool for code generation, refactoring, and project management.
+⚡ **AI-Powered Development Assistant** - A comprehensive CLI tool for code generation, refactoring, and project management.
 
 ## Features
 
@@ -111,21 +107,34 @@ blitzcoder chat --google-api-key "your-api-key"
 ### Project Structure
 
 ```
-blitz_cli/
+.
 ├── src/
-│   └── blitzcoder/
-│       ├── cli/
-│       │   ├── __init__.py
-│       │   └── cli_coder.py
-│       └── __init__.py
+│   ├── blitzcoder/
+│   │   └── cli/
+│   │       └── cli_coder.py      # Click-based CLI entrypoint
+│   └── main/
+│       └── graphapi.py           # Core LangGraph agent logic and state graph
+├── tools/
+│   ├── scaffold_and_generate_files.py # High-level tool for project creation
+│   ├── run_shell_command_in_sandbox.py # Secure command execution tool
+│   └── ... (many other modular tools)
 ├── config/
-│   └── templates/
-├── scripts/
-│   ├── blitzcoder
-│   └── blitzcoder.bat
-├── setup.py
-├── pyproject.toml
-└── install.py
+│   ├── settings.py
+│   └── templates/                # Contains templates for dozens of frameworks
+│       ├── Backend/
+│       ├── Frontend/
+│       └── ...
+├── models/
+│   ├── llm_model.py              # LLM (Gemini) configuration
+│   └── embedding_model.py        # Embedding model configuration
+├── observability/
+│   └── tracing.py                # Tracing and observability setup
+├── tests/
+│   ├── unit/
+│   └── integration/
+├── pyproject.toml                # Project metadata and dependencies (for PyPI)
+├── install.py                    # Main installation script
+└── Dockerfile         
 ```
 
 ### Running Tests
@@ -134,6 +143,18 @@ blitz_cli/
 # Install development dependencies
 pip install -e ".[dev]"
 
+### Quick Start
+1. Set up your API Keys
+BlitzCoder requires two API keys to function. It will prompt you for them on the first run, or you can set them as environment variables.
+Google Gemini API Key: For the core AI reasoning.
+```
+export GOOGLE_API_KEY=your-gemini-api-key
+```
+E2B Sandbox API Key: For secure command execution. Get a free key at e2b.dev.
+
+```
+export E2B_API_KEY=your-e2b-api-key
+```
 # Run tests
 pytest
 ```
@@ -180,5 +201,3 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Built with [LangGraph](https://github.com/langchain-ai/langgraph)
 - Powered by [Google Gemini](https://ai.google.dev/)
 - Enhanced with [Rich](https://github.com/Textualize/rich) for beautiful CLI output 
-
-
