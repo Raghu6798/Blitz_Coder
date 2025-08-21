@@ -1,7 +1,7 @@
 import os
 import uuid
 import click
-from rich.console import Console
+from rich.console import Console,Group
 from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.markdown import Markdown
@@ -139,6 +139,70 @@ hf = HuggingFaceEmbeddings(
 
 gemini_2_flash = None
 
+def setup_api_keys():
+    """
+    Handles the setup for both Gemini and E2B API keys. Checks environment
+    variables first, then prompts the user if a key is missing.
+    """
+    # --- Handle Google Gemini API Key ---
+    if not os.getenv("GOOGLE_API_KEY"):
+        console.print(
+            Panel.fit(
+                "[bold]🔑 Google Gemini API Key Required[/bold]\n\n"
+                "BlitzCoder uses Google's Gemini model. Please provide your API key.",
+                border_style="cyan"
+            )
+        )
+        google_api_key = Prompt.ask(
+            "🔑 [bold green]Paste your Gemini API key[/bold green]", password=True
+        )
+        if not validate_google_api_key(google_api_key):
+            show_error("Invalid Gemini API key. Please restart and try again.")
+            exit(1)
+        os.environ["GOOGLE_API_KEY"] = google_api_key
+        show_success("Gemini API key validated and set for this session.")
+    else:
+        show_success("Gemini API key found in environment variables.")
+
+    # Initialize the model now that we're sure the key is set
+    try:
+        initialize_gemini_2_flash()
+    except Exception as e:
+        show_error(f"Failed to initialize Gemini model: {e}")
+        exit(1)
+
+    # --- Handle E2B Sandbox API Key ---
+    if not os.getenv("E2B_API_KEY"):
+        explanation_panel = Panel.fit(
+            """
+[bold]Why a Sandbox is Critical (Preventing Command Injection)[/bold]
+
+When an AI agent generates shell commands, there's a risk of 'command injection'. A malicious or flawed command could potentially delete important files or read sensitive data from your computer.
+
+BlitzCoder prevents this by executing **all** shell commands inside the [bold]E2B secure sandbox[/bold], which is an isolated, temporary cloud environment with no access to your local files.
+
+To enable this critical security feature, you need a free API key from E2B.
+
+[bold]How to get your key:[/bold]
+1. Go to [blue u]https://e2b.dev[/blue u] and sign up.
+2. Copy your free API key and paste it below.
+            """,
+            title="[bold yellow]🔒 Action Required: Secure Sandbox Setup[/bold yellow]",
+            border_style="yellow",
+            padding=(1, 2)
+        )
+        console.print(explanation_panel)
+        e2b_api_key = Prompt.ask(
+            "🔑 [bold green]Paste your E2B API key[/bold green]", password=True
+        )
+        if not e2b_api_key or not e2b_api_key.strip():
+            show_error("E2B API key cannot be empty. Exiting.")
+            exit(1)
+        os.environ["E2B_API_KEY"] = e2b_api_key
+        show_success("E2B Sandbox API key set for this session.")
+    else:
+        show_success("E2B Sandbox API key found in environment variables.")
+
 def initialize_gemini_2_flash(api_key: str = None):
     """Initialize the Gemini 2.0 Flash model with the provided API key"""
     global gemini_2_flash
@@ -170,8 +234,8 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 console = Console()
 
-
 def print_welcome_banner():
+    """Prints an enhanced welcome banner with instructions and capabilities."""
     banner_text = Text(
         """
       ██████╗ ██╗     ██╗████████╗███████╗ ██████╗ ██████╗ ██████╗ ███████╗██████╗ 
@@ -180,19 +244,43 @@ def print_welcome_banner():
       ██╔══██╗██║     ██║   ██║    ███╔╝  ██║     ██║   ██║██║  ██║██╔══╝  ██╔══██╗
       ██████╔╝███████╗██║   ██║   ███████╗╚██████╗╚██████╔╝██████╔╝███████╗██║  ██║
       ╚═════╝ ╚══════╝╚═╝   ╚═╝   ╚══════╝ ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝
-
       """,
         style="orange1",
         justify="center",
     )
+
+    welcome_message = Markdown("""
+### Welcome to BlitzCoder! Your AI-Powered Development Assistant.
+This tool leverages AI to help you with a wide range of development tasks, right from your terminal.
+
+---
+### Key Capabilities:
+*   **Project Scaffolding:** Generate entire, production-ready project structures for any framework.
+*   **Code Generation & Refactoring:** Write, explain, and refactor code in any language.
+*   **Secure Command Execution:** Run shell commands, linters (`ruff`), and installers (`pip`) in a secure, isolated sandbox.
+*   **Debugging Assistance:** Run servers (FastAPI, Node.js), capture logs, and get AI-powered suggestions for errors.
+*   **Filesystem Operations:** Navigate your codebase, inspect files, and manage your project directory.
+*   **Semantic Memory:** Remembers the context of your conversation for more relevant assistance over time.
+
+---
+### How to Use:
+Simply type your request in plain English. Here are some examples:
+- `scaffold a new go project for a REST API with Fiber`
+- `run the ruff formatter on my current directory`
+- `explain the code in src/main.py`
+- `search: what was the database model we discussed earlier?`
+""")
+    
+    panel_content = Group(banner_text, welcome_message)
+
     panel = Panel(
-        banner_text,
+        panel_content,
         title="[bold orange1]⚡ BLITZCODER CLI[/bold orange1]",
         subtitle="[orange1]AI-Powered Dev Assistant[/orange1]",
         border_style="orange1",
         width=140,
         expand=True,
-        padding=(2, 0),
+        padding=(2, 2),
     )
     console.print(panel)
 
@@ -299,11 +387,9 @@ python_pattern = r"(?:python)?\\n(.*?)"
 code_pattern = r"(?:\w+)?\n(.*?)\n"
 
 
+
 class AgentState(MessagesState):
     documents: list[str]
-
-
-# Semantic memory store for user memories, using Google Gemini embeddings
 
 model_name = "sentence-transformers/all-mpnet-base-v2"
 model_kwargs = {"device": "cpu"}
@@ -654,7 +740,6 @@ def run_uvicorn_and_capture_logs(
     show_info("Uvicorn process terminated.")
     return logs
 
-
 @tool
 def run_shell_command_in_sandbox(
     command: str, cwd: str = "/", timeout: int = 60
@@ -674,8 +759,14 @@ def run_shell_command_in_sandbox(
     """
     show_info(f"Executing shell command in E2B sandbox: '{command}'")
     try:
-        # Use the 'with' statement for a clean, secure sandbox for each execution.
-        with Sandbox() as sandbox:
+        # The tool now simply assumes the API key is set in the environment.
+        e2b_api_key = os.getenv("E2B_API_KEY")
+        if not e2b_api_key:
+            error_msg = "CRITICAL ERROR: E2B_API_KEY environment variable not found. The tool cannot run."
+            show_error(error_msg)
+            return json.dumps({"error": error_msg, "exit_code": -1})
+
+        with Sandbox(api_key=e2b_api_key) as sandbox:
             exec_result = sandbox.commands.run(command, cwd=cwd, timeout=timeout)
 
             output = {
@@ -688,7 +779,6 @@ def run_shell_command_in_sandbox(
                 show_error(
                     f"Sandbox shell command failed with exit code {exec_result.exit_code}."
                 )
-                # Optionally show stderr to the user for immediate feedback
                 if exec_result.stderr:
                     console.print(
                         Panel(
@@ -706,8 +796,9 @@ def run_shell_command_in_sandbox(
         error_msg = f"An infrastructure error occurred while trying to run the shell command in the sandbox: {e}"
         show_error(error_msg)
         traceback.print_exc()
+        if "Authentication failed" in str(e):
+             show_error("Authentication with E2B failed. Please check your API key.")
         return json.dumps({"error": error_msg, "exit_code": -1})
-
 
 @tool
 def look_for_directory(path: str):
@@ -2206,36 +2297,8 @@ def cli():
 @click.option("--google-api-key", help="Google API key for Gemini model")
 def chat(google_api_key):
     """Start interactive chat with BlitzCoder AI agent."""
-    if google_api_key:
-        if validate_google_api_key(google_api_key):
-            os.environ["GOOGLE_API_KEY"] = google_api_key
-            # Initialize Gemini 2.0 Flash model
-            try:
-                initialize_gemini_2_flash(google_api_key)
-                show_success("✅ Gemini 2.0 Flash model initialized successfully!")
-            except Exception as e:
-                show_error(f"❌ Failed to initialize Gemini 2.0 Flash model: {e}")
-                exit(1)
-        else:
-            console.print("[bold red]❌ Invalid API key. Please try again.[/bold red]")
-            exit(1)
-    else:
-        google_api_key = Prompt.ask(
-            "🔑 [bold green]Paste your Gemini API key[/bold green]", password=True
-        )
-        if validate_google_api_key(google_api_key):
-            os.environ["GOOGLE_API_KEY"] = google_api_key
-            # Initialize Gemini 2.0 Flash model
-            try:
-                initialize_gemini_2_flash(google_api_key)
-                show_success("✅ Gemini 2.0 Flash model initialized successfully!")
-            except Exception as e:
-                show_error(f"❌ Failed to initialize Gemini 2.0 Flash model: {e}")
-                exit(1)
-        else:
-            console.print("[bold red]❌ Invalid API key. Please try again.[/bold red]")
-            exit(1)
-
+    setup_api_keys()
+    
     print_welcome_banner()
     user_id = str(uuid.uuid4())
     thread_id = str(uuid.uuid4())
@@ -2285,7 +2348,7 @@ def search_memories_cli(user_id, query, google_api_key):
             # Initialize Gemini 2.0 Flash model
             try:
                 initialize_gemini_2_flash(google_api_key)
-                show_success("✅ Gemini 2.0 Flash model initialized successfully!")
+                show_success("✅ Gemini 2.5 Flash model initialized successfully!")
             except Exception as e:
                 show_error(f"❌ Failed to initialize Gemini 2.0 Flash model: {e}")
                 exit(1)
