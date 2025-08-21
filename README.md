@@ -49,9 +49,6 @@ python scripts/blitzcoder
 
 You'll need a Google API key for the Gemini model:
 
-
-### Quick Start
-1. Set up your API Keys
 BlitzCoder requires two API keys to function. It will prompt you for them on the first run, or you can set them as environment variables.
 Google Gemini API Key: For the core AI reasoning.
 ```
@@ -195,5 +192,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Built with [LangGraph](https://github.com/langchain-ai/langgraph)
 - Powered by [Google Gemini](https://ai.google.dev/)
 - Enhanced with [Rich](https://github.com/Textualize/rich) for beautiful CLI output 
+
 
 
